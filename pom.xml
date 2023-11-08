@@ -47,6 +47,21 @@
           <url>https://repo.eclipse.org/content/repositories/eclipse/</url>
         </repository>
       </repositories>
+        <pluginRepositories>
+            <pluginRepository>
+                <id>pvs-maven-central-tycho</id>
+                <releases>
+                    <enabled>true</enabled>
+                </releases>
+                <snapshots>
+                    <enabled>true</enabled>
+                </snapshots>
+                <url>https://repo1.maven.org/maven2/org/eclipse/tycho</url>
+            </pluginRepository>
+        </pluginRepositories>
+        <properties>
+            <tycho.version>4.0.0</tycho.version>
+        </properties>
     </profile>
   </profiles>
 
