@@ -498,16 +498,19 @@ public void addPatternVariablesWhenFalse(LocalVariableBinding[] vars) {
 	this.patternVarsWhenFalse = addPatternVariables(this.patternVarsWhenFalse, vars);
 }
 private LocalVariableBinding[] addPatternVariables(LocalVariableBinding[] current, LocalVariableBinding[] add) {
-	if (add == null || add.length == 0)
-		return current;
-	if (current == null) {
-		current = add;
-	} else {
-		for (LocalVariableBinding local : add) {
-			current = addPatternVariables(current, local);
-		}
-	}
-	return current;
+    if (add == null || add.length == 0)
+        return current;
+    if (current == null || Arrays.equals(current, add)) { // ФИКС ЗАВИСАНИЯ в org.eclipse.jdt.core-3.32.0.jar
+        current = add;
+    } else {
+        final Set<LocalVariableBinding> localSet = new HashSet<LocalVariableBinding>(List.of(current)); // ФИКС ЗАВИСАНИЯ в org.eclipse.jdt.core-3.32.0.jar
+        for (LocalVariableBinding local : add) {
+            if (!localSet.contains(local)) { // ФИКС ЗАВИСАНИЯ в org.eclipse.jdt.core-3.32.0.jar
+                current = addPatternVariables(current, local);
+            }
+        }
+    }
+    return current;
 }
 private LocalVariableBinding[] addPatternVariables(LocalVariableBinding[] current, LocalVariableBinding add) {
 	int oldSize = current.length;
