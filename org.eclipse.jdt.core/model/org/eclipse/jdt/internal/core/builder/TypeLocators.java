@@ -272,7 +272,8 @@ public class TypeLocators {
 	 */
 	@Override
 	public boolean equals(Object obj) {
-		if (obj instanceof TypeLocators other) {
+		if (obj instanceof TypeLocators) {
+			TypeLocators other = (TypeLocators) obj;
 			if (!this.defaultMap.equals(other.defaultMap)) {
 				return false;
 			}

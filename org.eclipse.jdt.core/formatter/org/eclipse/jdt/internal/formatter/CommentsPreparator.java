@@ -795,7 +795,7 @@ public class CommentsPreparator extends ASTVisitor {
 	}
 
 	private void handleMarkdown(TagElement node) {
-		if (!(node.getParent() instanceof Javadoc javaDoc) || !javaDoc.isMarkdown()
+		if (!(node.getParent() instanceof Javadoc) || !((Javadoc) node.getParent()).isMarkdown()
 				|| !this.options.comment_format_markdown_comment) {
 			return;
 		}
@@ -1003,7 +1003,8 @@ public class CommentsPreparator extends ASTVisitor {
 		boolean columnUnderlineFound = false;
 		Matcher matcher;
 		for (Object fragment : fragments) {
-			if (fragment instanceof TextElement textElement) {
+			if (fragment instanceof TextElement) {
+				TextElement textElement = (TextElement) fragment;
 				String textContent = textElement.getText();
 				matcher = MARKDOWN_TABLE_START.matcher(textContent);
 				if (matcher.find()) {

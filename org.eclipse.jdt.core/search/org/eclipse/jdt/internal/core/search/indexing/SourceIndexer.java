@@ -166,8 +166,8 @@ public class SourceIndexer extends AbstractIndexer implements ITypeRequestor, Su
 	}
 
 	public void resolveDocument() {
-		if (usedDomBasedIndexing() && this.dom != null && getUnit() instanceof org.eclipse.jdt.internal.core.CompilationUnit unit) {
-			resolveDocumentDomImpl(unit);
+		if (usedDomBasedIndexing() && this.dom != null && getUnit() instanceof org.eclipse.jdt.internal.core.CompilationUnit) {
+			resolveDocumentDomImpl((org.eclipse.jdt.internal.core.CompilationUnit) getUnit());
 		} else {
 			try {
 				IPath path = new Path(this.document.getPath());
@@ -244,8 +244,8 @@ public class SourceIndexer extends AbstractIndexer implements ITypeRequestor, Su
 			@Override
 			public boolean visit(MethodDeclaration node) {
 				node.setJavadoc(null);
-				if (node.getParent() instanceof AbstractTypeDeclaration type &&
-					type.getParent() instanceof org.eclipse.jdt.core.dom.CompilationUnit) {
+				if (node.getParent() instanceof AbstractTypeDeclaration &&
+					((AbstractTypeDeclaration) node.getParent()).getParent() instanceof org.eclipse.jdt.core.dom.CompilationUnit) {
 					// reset
 					this.requiresBinding = false;
 				}
@@ -254,8 +254,8 @@ public class SourceIndexer extends AbstractIndexer implements ITypeRequestor, Su
 			@Override
 			public void endVisit(MethodDeclaration node) {
 				if (!this.requiresBinding &&
-					node.getParent() instanceof AbstractTypeDeclaration type &&
-					type.getParent() instanceof org.eclipse.jdt.core.dom.CompilationUnit &&
+					node.getParent() instanceof AbstractTypeDeclaration &&
+					((AbstractTypeDeclaration) node.getParent()).getParent() instanceof org.eclipse.jdt.core.dom.CompilationUnit &&
 					node.getBody() != null) {
 					node.getBody().statements().clear();
 				}
@@ -411,7 +411,8 @@ public class SourceIndexer extends AbstractIndexer implements ITypeRequestor, Su
 	}
 
 	private IFile getJavaSearchFile() {
-		if (this.document instanceof JavaSearchDocument javaSearchDoc) {
+		if (this.document instanceof JavaSearchDocument) {
+			JavaSearchDocument javaSearchDoc = (JavaSearchDocument) this.document;
 			return javaSearchDoc.getFile();
 		}
 		return null;

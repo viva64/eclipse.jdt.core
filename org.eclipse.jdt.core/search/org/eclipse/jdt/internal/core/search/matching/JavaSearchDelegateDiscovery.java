@@ -46,7 +46,8 @@ public class JavaSearchDelegateDiscovery {
 					return JAVA_SEARCH_DELEGATE_CACHE.get(id);
 				}
 				Object executableExtension = configElement.createExecutableExtension("class"); //$NON-NLS-1$
-				if (executableExtension instanceof IJavaSearchDelegate icep) {
+				if (executableExtension instanceof IJavaSearchDelegate) {
+					IJavaSearchDelegate icep = (IJavaSearchDelegate) executableExtension;
 					JAVA_SEARCH_DELEGATE_CACHE.put(id, icep);
 					return icep;
 				}

@@ -668,13 +668,15 @@ protected void reportDeclaration(MethodBinding methodBinding, MatchLocator locat
 	if (type == null) {
 		if (declaringClass instanceof LocalTypeBinding) {
 			ReferenceBinding refBinding= declaringClass;
-			while (refBinding instanceof LocalTypeBinding localBinding) {
+			while (refBinding instanceof LocalTypeBinding) {
+				LocalTypeBinding localBinding = (LocalTypeBinding) refBinding;
 				MethodBinding enclosingBinding= localBinding.enclosingMethod;
 				refBinding= enclosingBinding.declaringClass;
 			}
 			type= locator.lookupType(refBinding);
 			if (type != null) {
-				if (type.getTypeRoot() instanceof ICompilationUnit cu) {
+				if (type.getTypeRoot() instanceof ICompilationUnit) {
+					ICompilationUnit cu = (ICompilationUnit) type.getTypeRoot();
 					IJavaElement element= cu.getElementAt(methodBinding.sourceStart());
 					if (element instanceof IMethod) {
 						type= ((IMethod) element).getDeclaringType();

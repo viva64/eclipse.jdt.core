@@ -12934,7 +12934,7 @@ public void recoveryTokenCheck() {
 				this.lastCheckPoint = this.scanner.currentPosition;
 			if (newElement != this.currentElement){
 				this.currentElement = newElement;
-//				if (newElement instanceof RecoveredField && this.dietInt <= 0) {
+//				if (newElement instanceof RecoveredField recoveredField && this.dietInt <= 0) {
 	RecoveredField recoveredField = (RecoveredField) newElement;
 //					if (recoveredField.fieldDeclaration.type == null) { // enum constant
 //						this.isInsideEnumConstantPart = true; // restore status

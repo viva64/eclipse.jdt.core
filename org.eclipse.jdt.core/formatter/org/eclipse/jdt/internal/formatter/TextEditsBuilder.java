@@ -412,8 +412,8 @@ public class TextEditsBuilder extends TokenTraverser {
 		// token has indicated a needed replace.
 		if (this.options.put_text_block_quotes_on_new_line && !(token instanceof TokenTextBlock)
 				&& this.parent != null
-				&& this.parent.getCurrent() instanceof TokenTextBlock tokenTextBlock
-				&& tokenTextBlock.hasReplace()) {
+				&& this.parent.getCurrent() instanceof TokenTextBlock
+				&& ((TokenTextBlock) this.parent.getCurrent()).hasReplace()) {
 			String stringToCheck = this.source.substring(position, token.originalEnd + 1);
 			int splitPlace = stringToCheck.indexOf(closingQuotes);
 			if (splitPlace > 0) {

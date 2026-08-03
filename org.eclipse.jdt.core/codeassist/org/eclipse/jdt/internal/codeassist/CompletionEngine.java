@@ -3050,7 +3050,8 @@ public final class CompletionEngine
 					ProblemMethodBinding problemMethodBinding = (ProblemMethodBinding) qualifiedBinding;
 					findFieldsAndMethodsFromMissingReturnType(problemMethodBinding.selector,
 							problemMethodBinding.parameters, scope, access, insideTypeAnnotation);
-				} else if (access.receiver instanceof AllocationExpression expr) {
+				} else if (access.receiver instanceof AllocationExpression) {
+					AllocationExpression expr = (AllocationExpression) access.receiver;
 					// complete on missing type
 					// class X {
 					//   void foo() {
@@ -3059,10 +3060,12 @@ public final class CompletionEngine
 					// }
 					TypeReference type = expr.type;
 					char[] token = null;
-					if (type instanceof SingleTypeReference ref) {
+					if (type instanceof SingleTypeReference) {
+						SingleTypeReference ref = (SingleTypeReference) type;
 						token = ref.token;
 					}
-					if (type instanceof QualifiedTypeReference ref) {
+					if (type instanceof QualifiedTypeReference) {
+						QualifiedTypeReference ref = (QualifiedTypeReference) type;
 						token = ref.tokens[0];
 					}
 					if (token != null) {
@@ -3225,8 +3228,8 @@ public final class CompletionEngine
 			if ((arguments[index] instanceof CompletionNode)
 					// the following handles when the cursor is at the receiver in a completed expression like
 					// new PersonDetails(GH969.emptyList(), 0) here the cursor is after new PersonDetails(
-					|| (arguments[index] instanceof MessageSend ms && ms.receiver instanceof CompletionNode)
-					|| (arguments[index] instanceof FieldReference fr && fr.receiver instanceof CompletionNode)) {
+					|| (arguments[index] instanceof MessageSend && ((MessageSend) arguments[index]).receiver instanceof CompletionNode)
+					|| (arguments[index] instanceof FieldReference && ((FieldReference) arguments[index]).receiver instanceof CompletionNode)) {
 				return index;
 			}
 		}
@@ -3940,10 +3943,11 @@ public final class CompletionEngine
 	}
 
 	private void checkForVarargExpectedTypes(ASTNode astNodeParent, ASTNode astNode, Scope scope) {
-		if (astNodeParent instanceof MessageSend m
-				&& m.arguments() != null
-				&& Stream.of(m.arguments()).anyMatch(astNode::equals)
+		if (astNodeParent instanceof MessageSend
+				&& ((MessageSend) astNodeParent).arguments() != null
+				&& Stream.of(((MessageSend) astNodeParent).arguments()).anyMatch(astNode::equals)
 				&& this.expectedTypesPtr == -1) {
+			MessageSend m = (MessageSend) astNodeParent;
 			final ObjectVector methodsToSearchOn = new ObjectVector();
 			final CompletionRequestor actual = this.requestor;
 			this.requestor = new CompletionRequestor(true) {
@@ -9594,7 +9598,8 @@ public final class CompletionEngine
 				if(!this.isIgnored(CompletionProposal.METHOD_REF, missingElements != null) && (this.assistNodeInJavadoc & CompletionOnJavadoc.ONLY_INLINE_TAG) == 0) {
 					InternalCompletionProposal proposal =  createProposal(completionOnReferenceExpressionName ? CompletionProposal.METHOD_NAME_REFERENCE : CompletionProposal.METHOD_REF, this.actualCompletionPosition);
 
-					if (method.declaringClass.isRecord() && method instanceof SyntheticMethodBinding smb) {
+					if (method.declaringClass.isRecord() && method instanceof SyntheticMethodBinding) {
+						SyntheticMethodBinding smb = (SyntheticMethodBinding) method;
 						MethodBinding[] overridden = null;
 						switch(smb.purpose) {
 							case SyntheticMethodBinding.RecordOverrideToString:
@@ -9644,7 +9649,7 @@ public final class CompletionEngine
 						proposal.setRequiredProposals(subProposals);
 					}
 
-					if (this.parser.assistNodeParent instanceof Javadoc jdoc && jdoc.isMarkdown) {
+					if (this.parser.assistNodeParent instanceof Javadoc && ((Javadoc) this.parser.assistNodeParent).isMarkdown) {
 						proposal.displayString = completion;
 						proposal.setCompletion(CharOperation.replace(completion, "[]".toCharArray(), "\\[\\]".toCharArray()));  //$NON-NLS-1$//$NON-NLS-2$
 					} else {
@@ -9774,12 +9779,14 @@ public final class CompletionEngine
 		char[] parameterName = new char[0];
 		MethodBinding[] candidates;
 		final Expression[] arguments;
-		if (this.parser.assistNodeParent instanceof MessageSend ms) {
+		if (this.parser.assistNodeParent instanceof MessageSend) {
+			MessageSend ms = (MessageSend) this.parser.assistNodeParent;
 			arguments = ms.arguments;
 			candidates = Optional.ofNullable(ms.actualReceiverType)
 					.or(() -> Optional.ofNullable(ms.receiver).map(r -> r.resolvedType))
 					.map(t -> t.getMethods(ms.selector)).orElse(new MethodBinding[0]);
-		} else if (this.parser.assistNode instanceof MessageSend ms) {
+		} else if (this.parser.assistNode instanceof MessageSend) {
+			MessageSend ms = (MessageSend) this.parser.assistNode;
 			arguments = ms.arguments;
 			candidates = StreamSupport.stream(methodsFound.spliterator(), false)
 					.filter(Objects::nonNull)
@@ -9787,9 +9794,11 @@ public final class CompletionEngine
 					.map(o -> o[0]).filter(MethodBinding.class::isInstance).map(b -> (MethodBinding) b)
 					.filter(b -> CharOperation.equals(ms.selector, b.selector)).findFirst()
 					.map(m -> new MethodBinding[] { m }).orElse(new MethodBinding[0]);
-		} else if (this.parser.assistNodeParent instanceof AllocationExpression ae) {
+		} else if (this.parser.assistNodeParent instanceof AllocationExpression) {
+			AllocationExpression ae = (AllocationExpression) this.parser.assistNodeParent;
 			arguments = ae.arguments;
-			if (ae.type != null && ae.type.resolvedType instanceof ReferenceBinding rb) {
+			if (ae.type != null && ae.type.resolvedType instanceof ReferenceBinding) {
+				ReferenceBinding rb = (ReferenceBinding) ae.type.resolvedType;
 				findConstructors(rb, computeTypes(arguments), scope, ae, false, null, null, null, false, methodsFound,
 						true);
 			}
@@ -10854,7 +10863,8 @@ public final class CompletionEngine
 		MethodBinding[] receiverTypeMethods = receiverType.availableMethods();
 		if (receiverTypeMethods != null){
 			for (MethodBinding receiverTypeMethod : receiverTypeMethods) {
-				if (receiverType.isRecord() && receiverTypeMethod instanceof SyntheticMethodBinding smb) {
+				if (receiverType.isRecord() && receiverTypeMethod instanceof SyntheticMethodBinding) {
+					SyntheticMethodBinding smb = (SyntheticMethodBinding) receiverTypeMethod;
 					if (CharOperation.equals(smb.selector, TypeConstants.EQUALS) ||
 							CharOperation.equals(smb.selector, TypeConstants.HASHCODE) ||
 							CharOperation.equals(smb.selector, TypeConstants.TOSTRING))
@@ -10924,8 +10934,10 @@ public final class CompletionEngine
 		TypeBinding erasure =  method.declaringClass.erasure();
 		if(!(erasure instanceof ReferenceBinding)) return null;
 
-		if (method.isCanonicalConstructor() && method instanceof SyntheticMethodBinding synthesizedCCtor)
+		if (method.isCanonicalConstructor() && method instanceof SyntheticMethodBinding) {
+			SyntheticMethodBinding synthesizedCCtor = (SyntheticMethodBinding) method;
 			return synthesizedCCtor.parameterNames;
+		}
 
 		char[][] parameterNames = null;
 

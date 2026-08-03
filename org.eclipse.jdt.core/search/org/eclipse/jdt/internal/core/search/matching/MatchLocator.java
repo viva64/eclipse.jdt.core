@@ -338,7 +338,8 @@ public MatchLocator(
 	    // non-binary but not SourceType. The local-class statement
 	    // retention optimization only applies to Java source types.
 	    if (type != null && !type.isBinary()
-	    		&& type instanceof SourceType sourceType) {
+	    		&& type instanceof SourceType) {
+	    	SourceType sourceType = (SourceType) type;
 	    	IMember local = sourceType.getOuterMostLocalContext();
 	    	if (local instanceof IMethod) { // remember this method's range so we don't purge its statements.
 	    		try {
@@ -1740,7 +1741,8 @@ public SearchMatch newDeclarationMatch(
 		int length,
 		boolean overrideRangeFromMethod) {
 	SearchParticipant participant = getParticipant();
-	if (overrideRangeFromMethod && element instanceof IMethod method) {
+	if (overrideRangeFromMethod && element instanceof IMethod) {
+		IMethod method = (IMethod) element;
 		try {
 			offset = method.getNameRange().getOffset();
 			length = method.getNameRange().getLength();
@@ -2920,7 +2922,8 @@ protected void reportMatching(AbstractVariableDeclaration variable, FieldDeclara
 	}
 
 	// handle the nodes for the local type first
-	if (variable instanceof FieldDeclaration field && (field.bits & ASTNode.HasLocalType) != 0) {
+	if (variable instanceof FieldDeclaration && (((FieldDeclaration) variable).bits & ASTNode.HasLocalType) != 0) {
+		FieldDeclaration field = (FieldDeclaration) variable;
 		if (enclosingElement == null) {
 			enclosingElement = createHandle(field, type, parent);
 		}
@@ -2971,7 +2974,7 @@ protected void reportMatching(AbstractVariableDeclaration variable, FieldDeclara
 		// Look at field declaration
 		if (variable.getKind() != AbstractVariableDeclaration.INITIALIZER) { // not necessary if field is an initializer
 			int sourceStart = variable.declarationSourceStart;
-			int sourceEnd = variable instanceof FieldDeclaration field ? field.endPart1Position : variable.declarationSourceEnd;
+			int sourceEnd = variable instanceof FieldDeclaration ? ((FieldDeclaration) variable).endPart1Position : variable.declarationSourceEnd;
 			ASTNode[] nodes = nodeSet.matchingNodes(sourceStart, sourceEnd);
 			if (nodes != null) {
 				if ((this.matchContainer & PatternLocator.FIELD_CONTAINER) == 0) {
@@ -2994,7 +2997,8 @@ protected void reportMatching(AbstractVariableDeclaration variable, FieldDeclara
 		}
 
 		// Look in initializer
-		if (variable instanceof FieldDeclaration field) {
+		if (variable instanceof FieldDeclaration) {
+			FieldDeclaration field = (FieldDeclaration) variable;
 			int fieldEnd = field.endPart2Position == 0 ? field.declarationSourceEnd : field.endPart2Position;
 			ASTNode[] nodes = nodeSet.matchingNodes(field.sourceStart, fieldEnd);
 			if (nodes != null) {
@@ -3257,7 +3261,11 @@ protected void reportMatching(TypeDeclaration type, IJavaElement parent, int acc
 		int length = variables.length;
 		for (int i = 0; i < length; i++) {
 			AbstractVariableDeclaration variable = variables[i];
-			boolean last = variable instanceof FieldDeclaration field ? field.endPart2Position == 0 || field.declarationEnd == field.endPart2Position : true;
+			boolean last = true;
+			if (variable instanceof FieldDeclaration) {
+				FieldDeclaration field = (FieldDeclaration) variable;
+				last = field.endPart2Position == 0 || field.declarationEnd == field.endPart2Position;
+			}
 			// Store first index of multiple field declaration
 			if (!last) {
 				if (first == -1) {

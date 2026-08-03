@@ -406,7 +406,8 @@ public void acceptLocalVariable(LocalVariableBinding binding, org.eclipse.jdt.in
 		HashMap knownScopes = new HashMap();
 		parent = this.handleFactory.createElement(binding.declaringScope, local.sourceStart, (ICompilationUnit) unit, existingElements, knownScopes);
 	} else {
-		if (binding.isParameter() && binding.declaringScope.referenceContext() instanceof ConstructorDeclaration cd && cd.isCompactConstructor()) {
+		if (binding.isParameter() && binding.declaringScope.referenceContext() instanceof ConstructorDeclaration && ((ConstructorDeclaration) binding.declaringScope.referenceContext()).isCompactConstructor()) {
+			ConstructorDeclaration cd = (ConstructorDeclaration) binding.declaringScope.referenceContext();
 			parent = findLocalElement(cd.sourceStart);
 		} else {
 			parent = findLocalElement(local.sourceStart, binding.declaringScope.methodScope()); // findLocalElement() cannot find local variable

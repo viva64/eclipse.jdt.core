@@ -129,9 +129,10 @@ protected boolean buildStructure(OpenableElementInfo info, final IProgressMonito
 	// generate structure and compute syntax problems if needed
 	JavaModelManager.PerWorkingCopyInfo perWorkingCopyInfo = getPerWorkingCopyInfo();
 	IJavaProject project = getJavaProject();
-	boolean createAST = info instanceof ASTHolderCUInfo astHolder ? astHolder.astLevel != NO_AST : false;
-	boolean resolveBindings = info instanceof ASTHolderCUInfo astHolder ? astHolder.resolveBindings : false;
-	int reconcileFlags = info instanceof ASTHolderCUInfo astHolder ? astHolder.reconcileFlags : 0;
+	ASTHolderCUInfo astHolder = info instanceof ASTHolderCUInfo ? (ASTHolderCUInfo) info : null;
+	boolean createAST = astHolder != null ? astHolder.astLevel != NO_AST : false;
+	boolean resolveBindings = astHolder != null ? astHolder.resolveBindings : false;
+	int reconcileFlags = astHolder != null ? astHolder.reconcileFlags : 0;
 	boolean computeProblems = perWorkingCopyInfo != null && perWorkingCopyInfo.isActive() && project != null && JavaProject.hasJavaNature(project.getProject());
 	Map<String, String> options = this.getOptions(true);
 	if (!computeProblems) {
@@ -154,9 +155,9 @@ protected boolean buildStructure(OpenableElementInfo info, final IProgressMonito
 	}
 
 	CompilationUnit source = cloneCachingContents();
-	Map<String, CategorizedProblem[]> problems = info instanceof ASTHolderCUInfo astHolder ? astHolder.problems : null;
+	Map<String, CategorizedProblem[]> problems = astHolder != null ? astHolder.problems : null;
 	if (DOM_BASED_OPERATIONS) {
-		ASTParser astParser = ASTParser.newParser(info instanceof ASTHolderCUInfo astHolder && astHolder.astLevel > 0 ? astHolder.astLevel : AST.getJLSLatest());
+		ASTParser astParser = ASTParser.newParser(astHolder != null && astHolder.astLevel > 0 ? astHolder.astLevel : AST.getJLSLatest());
 		astParser.setWorkingCopyOwner(getOwner());
 		astParser.setSource(this instanceof ClassFileWorkingCopy ? source : this);
 		astParser.setProject(getJavaProject());
@@ -179,7 +180,8 @@ protected boolean buildStructure(OpenableElementInfo info, final IProgressMonito
 			}
 		} catch (AbortCompilationUnit e) {
 			var problem = e.problem;
-			if (problem == null && e.exception instanceof IOException ioEx) {
+			if (problem == null && e.exception instanceof IOException) {
+				IOException ioEx = (IOException) e.exception;
 				String path = source.getPath().toString();
 				String exceptionTrace = ioEx.getClass().getName() + ':' + ioEx.getMessage();
 				problem = new DefaultProblemFactory().createProblem(
@@ -199,13 +201,14 @@ protected boolean buildStructure(OpenableElementInfo info, final IProgressMonito
 				perWorkingCopyInfo.endReporting();
 			}
 		}
-		if (dom instanceof org.eclipse.jdt.core.dom.CompilationUnit newAST) {
+		if (dom instanceof org.eclipse.jdt.core.dom.CompilationUnit) {
+			org.eclipse.jdt.core.dom.CompilationUnit newAST = (org.eclipse.jdt.core.dom.CompilationUnit) dom;
 			if (computeProblems) {
 				IProblem[] interestingProblems = Arrays.stream(newAST.getProblems())
 					.filter(problem ->
 						!ignoreOptionalProblems()
 						|| !(problem instanceof DefaultProblem)
-						|| (problem instanceof DefaultProblem defaultProblem && (defaultProblem.severity & ProblemSeverities.Optional) == 0)
+						|| (problem instanceof DefaultProblem && (((DefaultProblem) problem).severity & ProblemSeverities.Optional) == 0)
 					).toArray(IProblem[]::new);
 				if (perWorkingCopyInfo != null && problems == null) {
 					try {
@@ -223,7 +226,7 @@ protected boolean buildStructure(OpenableElementInfo info, final IProgressMonito
 						.toArray(CategorizedProblem[]::new));
 				}
 			}
-			if (info instanceof ASTHolderCUInfo astHolder) {
+			if (astHolder != null) {
 				astHolder.ast = newAST;
 			}
 			newAST.accept(new DOMToModelPopulator(newElements, this, unitInfo));
@@ -493,7 +496,8 @@ public org.eclipse.jdt.core.dom.CompilationUnit getOrBuildAST(WorkingCopyOwner w
 	parser.setBindingsRecovery(true);
 	parser.setCompilerOptions(options);
 	parser.setFocalPosition(focalPosition);
-	if (parser.createAST(null) instanceof org.eclipse.jdt.core.dom.CompilationUnit newAST) {
+	if (parser.createAST(null) instanceof org.eclipse.jdt.core.dom.CompilationUnit) {
+		org.eclipse.jdt.core.dom.CompilationUnit newAST = (org.eclipse.jdt.core.dom.CompilationUnit) parser.createAST(null);
 		if (focalPosition >= 0) {
 			// do not store
 			return newAST;
@@ -641,7 +645,8 @@ public void discardWorkingCopy() throws JavaModelException {
  */
 @Override
 public boolean equals(Object obj) {
-	if (!(obj instanceof CompilationUnit other)) return false;
+	if (!(obj instanceof CompilationUnit)) return false;
+	CompilationUnit other = (CompilationUnit) obj;
 	return this.owner.equals(other.owner) && super.equals(obj);
 }
 

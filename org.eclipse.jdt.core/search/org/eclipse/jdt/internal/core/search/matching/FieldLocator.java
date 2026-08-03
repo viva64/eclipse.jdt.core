@@ -284,13 +284,15 @@ protected void reportDeclaration(FieldBinding fieldBinding, MatchLocator locator
 	if (type == null) {
 		if (declaringClass instanceof LocalTypeBinding) {
 			ReferenceBinding refBinding= declaringClass;
-			while (refBinding instanceof LocalTypeBinding localBinding) {
+			while (refBinding instanceof LocalTypeBinding) {
+				LocalTypeBinding localBinding = (LocalTypeBinding) refBinding;
 				MethodBinding enclosingBinding= localBinding.enclosingMethod;
 				refBinding= enclosingBinding.declaringClass;
 			}
 			type= locator.lookupType(refBinding);
 			if (type != null) {
-				if (type.getTypeRoot() instanceof ICompilationUnit cu) {
+				if (type.getTypeRoot() instanceof ICompilationUnit) {
+					ICompilationUnit cu = (ICompilationUnit) type.getTypeRoot();
 					FieldDeclaration fieldDecl= fieldBinding.sourceField();
 					if (fieldDecl != null) {
 						IJavaElement element= cu.getElementAt(fieldDecl.sourceStart());
@@ -360,7 +362,7 @@ public int resolveLevel(Binding binding) {
 	if (binding == null) return INACCURATE_MATCH;
 	if( binding instanceof LocalVariableBinding) {
 		// for matching the component in constructor of a record
-		if ( ((LocalVariableBinding)binding).declaringScope.referenceContext() instanceof ConstructorDeclaration cd && cd.isCompactConstructor()) {
+		if ( ((LocalVariableBinding)binding).declaringScope.referenceContext() instanceof ConstructorDeclaration && ((ConstructorDeclaration) ((LocalVariableBinding)binding).declaringScope.referenceContext()).isCompactConstructor()) {
 			return matchLocal((LocalVariableBinding) binding, true);
 		}
 	}

@@ -1826,7 +1826,21 @@ public class NameLookup implements SuffixConstants {
 		trace(" -> isPackage(pkg,moduleCtx)..................." + this.timeSpentInIsPackageWithModuleContext + "ms");  //$NON-NLS-1$ //$NON-NLS-2$
 	}
 
-	private static final record PackageFragmentWithRelease(IPackageFragment fragment, int release) {
+	private static final class PackageFragmentWithRelease {
+		private final IPackageFragment fragment;
+		private final int release;
 
+		PackageFragmentWithRelease(IPackageFragment fragment, int release) {
+			this.fragment = fragment;
+			this.release = release;
+		}
+
+		public IPackageFragment fragment() {
+			return this.fragment;
+		}
+
+		public int release() {
+			return this.release;
+		}
 	}
 }

@@ -79,7 +79,8 @@ String[] directoryList(String qualifiedPackageName) {
 
 	try {
 		IResource container = this.binaryFolder.findMember(qualifiedPackageName); // this is a case-sensitive check
-		if (container instanceof IContainer binaryContainer) {
+		if (container instanceof IContainer) {
+			IContainer binaryContainer = (IContainer) container;
 			IResource[] members = binaryContainer.members();
 			dirList = new String[members.length];
 			int index = 0;
@@ -97,7 +98,8 @@ String[] directoryList(String qualifiedPackageName) {
 			}
 			if(!foundClass) {
 				container = this.sourceFolder.findMember(qualifiedPackageName);
-				if (container instanceof IContainer sourceContainer) {
+				if (container instanceof IContainer) {
+					IContainer sourceContainer = (IContainer) container;
 					members = sourceContainer.members();
 					if (members.length > 0) {
 						dirList = new String[members.length];

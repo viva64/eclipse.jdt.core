@@ -44,7 +44,8 @@ class CompletionEngineProviderDiscovery {
 					return ENGINE_PROVIDER_CACHE.get(id);
 				}
 				Object executableExtension = configElement.createExecutableExtension("class"); //$NON-NLS-1$
-				if (executableExtension instanceof ICompletionEngineProvider icep) {
+				if (executableExtension instanceof ICompletionEngineProvider) {
+					ICompletionEngineProvider icep = (ICompletionEngineProvider) executableExtension;
 					ENGINE_PROVIDER_CACHE.put(id, icep);
 					return icep;
 				}

@@ -84,7 +84,8 @@ public class DerivedSourceSearchParticipantRegistry implements IRegistryEventLis
 			Set<String> exts = entry.getValue();
 			try {
 				Object instance = config.createExecutableExtension(ATTR_CLASS);
-				if (instance instanceof DerivedSourceSearchParticipant sp) {
+				if (instance instanceof DerivedSourceSearchParticipant) {
+					DerivedSourceSearchParticipant sp = (DerivedSourceSearchParticipant) instance;
 					String languageId = config.getAttribute(ATTR_LANGUAGE_ID);
 					for (String ext : exts) {
 						DerivedSourceSearchParticipant existing = this.participantsByExtension.put(ext, sp);

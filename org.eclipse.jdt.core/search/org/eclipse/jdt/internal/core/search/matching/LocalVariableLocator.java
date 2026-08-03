@@ -127,7 +127,7 @@ public int resolveLevel(Binding binding) {
 		return matchField(binding, true);
 	}
 	if (binding instanceof LocalVariableBinding) {
-		if (((LocalVariableBinding)binding).declaringScope.referenceContext() instanceof ConstructorDeclaration cd && cd.isCompactConstructor()) {
+		if (((LocalVariableBinding)binding).declaringScope.referenceContext() instanceof ConstructorDeclaration && ((ConstructorDeclaration) ((LocalVariableBinding)binding).declaringScope.referenceContext()).isCompactConstructor()) {
 			//update with binding
 			if (this.pattern instanceof FieldPattern) {
 				return matchField(binding, true);

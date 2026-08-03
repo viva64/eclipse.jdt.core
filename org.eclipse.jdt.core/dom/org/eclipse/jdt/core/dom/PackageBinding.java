@@ -277,22 +277,22 @@ class PackageBinding implements IPackageBinding {
 		char[] segName= segments[i++].toCharArray();
 		foundBinding = pkgBinding.getTypeOrPackage(segName, this.binding.enclosingModule, false);
 		if (foundBinding != null && foundBinding.isValidBinding()
-				&& (foundBinding instanceof org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding refBinding)) {
-			org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding referenceBinding = refBinding;
+				&& (foundBinding instanceof org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding)) {
+			org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding referenceBinding = (org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding) foundBinding;
 			while (i < segments.length) {
 				segName = segments[i++].toCharArray();
 				foundBinding = referenceBinding.getMemberType(segName);
 				if (foundBinding == null || !foundBinding.isValidBinding()
-						|| !(foundBinding instanceof org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding foundRefBinding)) {
+						|| !(foundBinding instanceof org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding)) {
 					break;
 				} else {
-					referenceBinding = foundRefBinding;
+					referenceBinding = (org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding) foundBinding;
 				}
 			}
 		}
 		if (foundBinding != null && foundBinding.isValidBinding()
-				&& foundBinding instanceof org.eclipse.jdt.internal.compiler.lookup.TypeBinding typeBinding) {
-			return this.resolver.getTypeBinding(typeBinding);
+				&& foundBinding instanceof org.eclipse.jdt.internal.compiler.lookup.TypeBinding) {
+			return this.resolver.getTypeBinding((org.eclipse.jdt.internal.compiler.lookup.TypeBinding) foundBinding);
 		}
 		return null;
 	}

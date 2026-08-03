@@ -463,7 +463,8 @@ private void computeClasspathLocations(
 		// This ensures that the same is happening here as at runtime:
 		// Types from higher versioned directories replace types from lower versions.
 		outputFolders.sort(Comparator.comparingInt(loc -> {
-			if (loc instanceof ClasspathMultiDirectory md) {
+			if (loc instanceof ClasspathMultiDirectory) {
+				ClasspathMultiDirectory md = (ClasspathMultiDirectory) loc;
 				return md.release;
 			}
 			return JavaProject.NO_RELEASE;

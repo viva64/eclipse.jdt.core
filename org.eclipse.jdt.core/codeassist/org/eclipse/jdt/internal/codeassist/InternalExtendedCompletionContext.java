@@ -751,7 +751,7 @@ public class InternalExtendedCompletionContext {
 						// Do not just on account of the initialization not being nulled out, conclude that completion is happening
 						// inside the initialized and excluded the declared variable. Use co-ordinates to be sure.
 						if (local.declaration.initialization != null) {
-							if (local.declaration.type instanceof SingleTypeReference singleTypeReference && CharOperation.equals(singleTypeReference.token, TypeConstants.VAR)) {
+							if (local.declaration.type instanceof SingleTypeReference && CharOperation.equals(((SingleTypeReference) local.declaration.type).token, TypeConstants.VAR)) {
 								if (local.declaration.initialization.sourceEnd > 0) {
 									if (this.assistNode.sourceEnd <= local.declaration.initialization.sourceEnd
 											&& this.assistNode.sourceStart >= local.declaration.initialization.sourceStart) {

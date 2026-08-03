@@ -313,15 +313,19 @@ public class SearchableEnvironment
 
 	@Override
 	public boolean isOnModulePath(ICompilationUnit unit) {
-		if (unit instanceof CompilationUnit cUnit) {
+		if (unit instanceof CompilationUnit) {
+			CompilationUnit cUnit = (CompilationUnit) unit;
 			IPackageFragmentRoot root = cUnit.originalFromClone().getPackageFragmentRoot();
 			if (Objects.equals(root.getJavaProject(), this.project))
 				return true; // current project: modular if it contains module-info :)
 			IClasspathEntry entry = this.nameLookup.rootToResolvedEntries.get(root);
-			if (entry instanceof ClasspathEntry cpEntry)
+			if (entry instanceof ClasspathEntry) {
+				ClasspathEntry cpEntry = (ClasspathEntry) entry;
 				return cpEntry.isModular();
+			}
 			return true; // out-of-band resolution / transitive dependency?
-		} else if (unit instanceof BasicCompilationUnit bUnit) {
+		} else if (unit instanceof BasicCompilationUnit) {
+			BasicCompilationUnit bUnit = (BasicCompilationUnit) unit;
 			return bUnit.moduleName != null;
 		}
 		return false;

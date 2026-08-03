@@ -363,7 +363,8 @@ public final class ImportRewrite {
 						}
 						if (foundModuleImport != null) {
 							IBinding moduleImportBinding= foundModuleImport.resolveBinding();
-							if (moduleImportBinding instanceof IModuleBinding moduleBinding) {
+							if (moduleImportBinding instanceof IModuleBinding) {
+								IModuleBinding moduleBinding = (IModuleBinding) moduleImportBinding;
 								packageNames= getPackageNamesForModule(moduleBinding, compilationUnit.getJavaElement().getJavaProject());
 							}
 						}
@@ -512,7 +513,8 @@ public final class ImportRewrite {
 				if (Modifier.isModule(curr.getModifiers())) {
 					List<String> packageList= new ArrayList<>();
 					IBinding binding= curr.resolveBinding();
-					if (binding instanceof IModuleBinding moduleBinding) {
+					if (binding instanceof IModuleBinding) {
+						IModuleBinding moduleBinding = (IModuleBinding) binding;
 						packageList= getPackageNamesForModule(moduleBinding, astRoot.getJavaElement().getJavaProject());
 					}
 					moduleEntries.put(curr.getName().getFullyQualifiedName(), packageList);

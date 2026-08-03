@@ -189,7 +189,7 @@ private void addDefaultConstructorIfNecessary(TypeInfo typeInfo) {
 		char [][] parameterNames = new char[argCount][];
 		for (int i = 0; i < argCount; i++) {
 			final TypeReference type = typeDeclaration.recordComponents[i].type;
-			parameterTypes[i] = type instanceof SingleTypeReference str ? str.token : CharOperation.concatWith(((QualifiedTypeReference)type).tokens, '.');
+			parameterTypes[i] = type instanceof SingleTypeReference ? ((SingleTypeReference) type).token : CharOperation.concatWith(((QualifiedTypeReference)type).tokens, '.');
 			parameterNames[i] = typeDeclaration.recordComponents[i].name;
 		}
 		this.indexer.addConstructorDeclaration(

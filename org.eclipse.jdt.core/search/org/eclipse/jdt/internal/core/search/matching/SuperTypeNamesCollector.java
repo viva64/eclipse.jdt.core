@@ -197,7 +197,8 @@ public char[][][] collect() throws JavaModelException {
 			// (e.g., Kotlin) may provide IType implementations that are
 			// non-binary but not SourceType. The supertype collection
 			// via Java AST parsing only applies to Java source types.
-			} else if (this.type instanceof SourceType sourceType) {
+			} else if (this.type instanceof SourceType) {
+				SourceType sourceType = (SourceType) this.type;
 				ICompilationUnit unit = this.type.getCompilationUnit();
 				boolean isTopLevelOrMember = sourceType.getOuterMostLocalContext() == null;
 				CompilationUnitDeclaration parsedUnit = buildBindings(unit, isTopLevelOrMember);

@@ -679,14 +679,16 @@ protected void attachOrphanCompletionNode(){
 	LocalDeclaration local = getLocalDeclarationFromAstStack();
 	if (local != null) {
 		Statement enclosing = buildMoreCompletionEnclosingContext(local);
-		if (enclosing instanceof IfStatement ifStatement) {
-			if (this.currentElement instanceof RecoveredBlock recoveredBlock) {
+		if (enclosing instanceof IfStatement) {
+			IfStatement ifStatement = (IfStatement) enclosing;
+			if (this.currentElement instanceof RecoveredBlock) {
+				RecoveredBlock recoveredBlock = (RecoveredBlock) this.currentElement;
 				// RecoveredLocalVariable must be removed from its parent because the IfStatement will be added instead
 				RecoveredStatement[] statements = new RecoveredStatement[recoveredBlock.statementCount - 1];
 				int j = 0;
 				for (int i = 0; i < recoveredBlock.statementCount; i++) {
 					RecoveredStatement statement = recoveredBlock.statements[i];
-					if ( !(statement instanceof RecoveredLocalVariable recoveredLocalVariable && recoveredLocalVariable.localDeclaration == local)) {
+					if ( !(statement instanceof RecoveredLocalVariable && ((RecoveredLocalVariable) statement).localDeclaration == local)) {
 						statements[j++] = statement;
 					}
 				}
@@ -695,7 +697,9 @@ protected void attachOrphanCompletionNode(){
 				}
 				recoveredBlock.statements[--recoveredBlock.statementCount] = null;
 				//  if (a instanceof List l) { l.is| Object // https://github.com/eclipse-jdt/eclipse.jdt.core/issues/2106
-				if (ifStatement.condition instanceof InstanceOfExpression iof && iof.pattern instanceof TypePattern pattern) {
+				if (ifStatement.condition instanceof InstanceOfExpression && ((InstanceOfExpression) ifStatement.condition).pattern instanceof TypePattern) {
+					InstanceOfExpression iof = (InstanceOfExpression) ifStatement.condition;
+					TypePattern pattern = (TypePattern) iof.pattern;
 					this.currentElement.add(pattern.local, 0);
 					iof.pattern = null;
 				}
@@ -712,7 +716,8 @@ private LocalDeclaration getLocalDeclarationFromAstStack() {
 		// To take care of:  if (a instance of X)  int i = a.|
 		// if (a instanceof List l) { l.is| Object
 		//  if (a instanceof List l) { l.| Object // https://github.com/eclipse-jdt/eclipse.jdt.core/issues/2106
-		if (this.astStack[ptr] instanceof LocalDeclaration local) {
+		if (this.astStack[ptr] instanceof LocalDeclaration) {
+			LocalDeclaration local = (LocalDeclaration) this.astStack[ptr];
 			if (local.initialization == this.assistNode || local.type == this.assistNode) {
 				return local;
 			}
@@ -1228,7 +1233,8 @@ private boolean assembleSwitch(Expression innerStatement) {
 		CaseStatement caseStatement = null;
 		int casePos = -1;
 		for (int i=this.astPtr; i >= 0; i--) {
-			if (this.astStack[i] instanceof CaseStatement stmt) {
+			if (this.astStack[i] instanceof CaseStatement) {
+				CaseStatement stmt = (CaseStatement) this.astStack[i];
 				caseStatement = stmt;
 				casePos = i;
 				break;
@@ -1278,14 +1284,16 @@ private boolean popBlockContaining(ASTNode soughtStatement) {
 	// check if soughtStatement was prematurely captured in a RecoveredStatement up the parent chain.
 	// if so, pop until the next parent.
 	RecoveredElement elem = this.currentElement;
-	while (elem instanceof RecoveredBlock block) {
+	while (elem instanceof RecoveredBlock) {
+		RecoveredBlock block = (RecoveredBlock) elem;
 		for (int i=0; i<block.statementCount; i++) {
 			RecoveredStatement stmt;
 			if ((stmt = block.statements[i]) != null) {
 				if (stmt.statement == soughtStatement) {
 					this.currentElement = block.parent;
 					// also remove block from the new currentElement:
-					if (this.currentElement instanceof RecoveredBlock newBlock) {
+					if (this.currentElement instanceof RecoveredBlock) {
+						RecoveredBlock newBlock = (RecoveredBlock) this.currentElement;
 						if (newBlock.statements[newBlock.statementCount-1] == block)
 							newBlock.statementCount--;
 					}
@@ -4218,7 +4226,8 @@ protected void consumeToken(TerminalToken token) {
 					popElement(K_BETWEEN_LEFT_AND_RIGHT_BRACKET);
 				}
 				break;
-			case TokenNameARROW, TokenNameCOLON:
+			case TokenNameARROW:
+			case TokenNameCOLON:
 				if(topKnownElementKind(COMPLETION_OR_ASSIST_PARSER) == K_RECORD_PATTERN) {
 					popElement(K_RECORD_PATTERN);
 				}
@@ -5880,7 +5889,8 @@ private boolean checkIfAtFirstArgumentOfConstructor() {
 
 	if (this.assistNode instanceof CompletionOnSingleNameReference) {
 		return startPos == this.assistNode.sourceEnd;
-	} else if (this.assistNode instanceof CompletionOnMessageSendName ms) {
+	} else if (this.assistNode instanceof CompletionOnMessageSendName) {
+		CompletionOnMessageSendName ms = (CompletionOnMessageSendName) this.assistNode;
 		return startPos == ms.sourceStart - 1;
 	}
 	return false;

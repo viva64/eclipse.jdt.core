@@ -829,7 +829,8 @@ public class BasicSearchEngine {
 									if (method.isConstructor()) {
 										needDefaultConstructor = false;
 										if (needCanonicalConstructor) {
-											if (method instanceof SourceMethod sourceMethod && sourceMethod.getElementInfo() instanceof SourceMethodElementInfo info) {
+											if (method instanceof SourceMethod && ((SourceMethod) method).getElementInfo() instanceof SourceMethodElementInfo) {
+												SourceMethodElementInfo info = (SourceMethodElementInfo) ((SourceMethod) method).getElementInfo();
 												if (info.isCanonicalConstructor()) // not totally reliable, see https://github.com/eclipse-jdt/eclipse.jdt.core/issues/4222
 													needCanonicalConstructor = false;
 											}

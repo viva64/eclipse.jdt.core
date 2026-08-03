@@ -466,7 +466,7 @@ protected void compile(SourceFile[] units, SourceFile[] additionalUnits, boolean
 						List<IContainer> list = sourceFolderReleaseMapping.getValue().stream()
 								.map(sf -> sf.sourceLocation.sourceFolder)
 								.distinct()
-								.toList();
+								.collect(Collectors.toList());
 						for (IContainer container : list) {
 							createProblemFor(container, null,
 									NLS.bind(Messages.AbstractImageBuilder_mr_missmatch_main,
@@ -620,7 +620,8 @@ private void createFolder(IContainer container) throws CoreException {
 	if (container.exists()) {
 		return;
 	}
-	if (container instanceof IFolder folder) {
+	if (container instanceof IFolder) {
+		IFolder folder = (IFolder) container;
 		createFolder(container.getParent());
 		folder.create(IResource.FORCE | IResource.DERIVED, true, null);
 	}
