@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2020 IBM Corporation and others.
+ * Copyright (c) 2000, 2025 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -53,6 +53,7 @@ public class TypeParameter extends AbstractVariableDeclaration {
 		}
 	}
 
+	@Override
 	public void getAllAnnotationContexts(int targetType, int typeParameterIndex, List<AnnotationContext> allAnnotationContexts) {
 		AnnotationCollector collector = new AnnotationCollector(this, targetType, typeParameterIndex, allAnnotationContexts);
 		if (this.annotations != null) {
@@ -134,6 +135,10 @@ public class TypeParameter extends AbstractVariableDeclaration {
 				this.binding.setTypeAnnotations(annotationBindings, isAnnotationBasedNullAnalysisEnabled);
 				scope.referenceCompilationUnit().compilationResult.hasAnnotations = true;
 			}
+			if (this.binding.getTypeAnnotations() == Binding.AWAITED_ANNOTATIONS) { // In <T extends @Nullable Number>; T itself doesn't carry annotations, some bound does
+				this.binding.setTypeAnnotations(Binding.NO_ANNOTATIONS, isAnnotationBasedNullAnalysisEnabled); // not awaited anymore
+				scope.referenceCompilationUnit().compilationResult.hasAnnotations = true;
+			}
 			if (isAnnotationBasedNullAnalysisEnabled) {
 				if (this.binding != null && this.binding.isValidBinding()) {
 					if (scope.hasDefaultNullnessFor(Binding.DefaultLocationTypeParameter, this.sourceStart())) {
@@ -141,29 +146,19 @@ public class TypeParameter extends AbstractVariableDeclaration {
 							if ((this.binding.tagBits & TagBits.AnnotationNonNull) != 0)
 								scope.problemReporter().nullAnnotationIsRedundant(this);
 						} else { // no explicit type annos, add the default:
-							TypeVariableBinding previousBinding = this.binding;
-							this.binding = (TypeVariableBinding) environment.createNonNullAnnotatedType(this.binding);
-
-							if (scope instanceof MethodScope) {
-								/*
-								 * for method type parameters, references to the bindings have already been copied into
-								 * MethodBinding.typeVariables - update them.
-								 */
-								MethodScope methodScope = (MethodScope) scope;
-								if (methodScope.referenceContext instanceof AbstractMethodDeclaration) {
-									MethodBinding methodBinding = ((AbstractMethodDeclaration) methodScope.referenceContext).binding;
-									if (methodBinding != null) {
-										methodBinding.updateTypeVariableBinding(previousBinding, this.binding);
-									}
-								}
-							}
+							annotationBindings = this.binding.getTypeAnnotations();
+							AnnotationBinding [] newAnnotations = new AnnotationBinding[annotationBindings == null ? 1 : annotationBindings.length + 1];
+							if (annotationBindings != null)
+								System.arraycopy(annotationBindings, 0, newAnnotations, 0, annotationBindings.length);
+							newAnnotations[newAnnotations.length - 1] = environment.getNonNullAnnotation();
+							this.binding.setTypeAnnotations(newAnnotations, true);
 						}
 					}
 					this.binding.evaluateNullAnnotations(scope, this);
 				}
 			}
 			if (this.binding != null)
-				this.binding.tagBits |= TagBits.AnnotationResolved;
+				this.binding.extendedTagBits |= ExtendedTagBits.AnnotationResolved;
 		}
 	}
 
@@ -234,7 +229,7 @@ public class TypeParameter extends AbstractVariableDeclaration {
 	}
 
 	public void updateWithAnnotations(ClassScope scope) {
-		if (this.binding == null || (this.binding.tagBits & TagBits.AnnotationResolved) != 0)
+		if (this.binding == null || (this.binding.extendedTagBits & ExtendedTagBits.AnnotationResolved) != 0)
 			return;
 		if (this.type != null) {
 			TypeBinding prevType = this.type.resolvedType;
@@ -265,5 +260,15 @@ public class TypeParameter extends AbstractVariableDeclaration {
 			}
 		}
 		resolveAnnotations(scope);
+	}
+
+	@Override
+	public TypeVariableBinding getBinding() {
+		return this.binding;
+	}
+
+	@Override
+	public void setBinding(Binding binding) {
+		this.binding = (TypeVariableBinding) binding;
 	}
 }

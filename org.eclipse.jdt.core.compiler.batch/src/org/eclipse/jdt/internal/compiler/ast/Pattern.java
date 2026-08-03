@@ -15,6 +15,7 @@ package org.eclipse.jdt.internal.compiler.ast;
 
 import org.eclipse.jdt.internal.compiler.codegen.BranchLabel;
 import org.eclipse.jdt.internal.compiler.codegen.CodeStream;
+import org.eclipse.jdt.internal.compiler.impl.Constant;
 import org.eclipse.jdt.internal.compiler.impl.JavaFeature;
 import org.eclipse.jdt.internal.compiler.lookup.BaseTypeBinding;
 import org.eclipse.jdt.internal.compiler.lookup.BlockScope;
@@ -30,7 +31,7 @@ public abstract class Pattern extends Expression {
 
 	boolean isTotalTypeNode = false;
 
-	private Pattern enclosingPattern;
+	private RecordPattern enclosingPattern;
 
 	protected MethodBinding accessorMethod;
 
@@ -56,54 +57,11 @@ public abstract class Pattern extends Expression {
 
 	protected TypeBinding outerExpressionType; // the expression type of the enclosing instanceof, switch or outer record pattern
 
-    static final class TestContextRecord {
-        private final TypeBinding left;
-        private final TypeBinding right;
-        private final PrimitiveConversionRoute route;
+	private boolean previewReported;
 
-        TestContextRecord(TypeBinding left, TypeBinding right, PrimitiveConversionRoute route) {
-            this.left = left;
-            this.right = right;
-            this.route = route;
-        }
+	record TestContextRecord(TypeBinding left, TypeBinding right, PrimitiveConversionRoute route) {}
 
-        public TypeBinding left() {
-            return left;
-        }
-
-        public TypeBinding right() {
-            return right;
-        }
-
-        public PrimitiveConversionRoute route() {
-            return route;
-        }
-
-        @java.lang.Override
-        public boolean equals(java.lang.Object obj) {
-            if (obj == this) return true;
-            if (obj == null || obj.getClass() != this.getClass()) return false;
-            var that = (TestContextRecord) obj;
-            return java.util.Objects.equals(this.left, that.left) &&
-                   java.util.Objects.equals(this.right, that.right) &&
-                   java.util.Objects.equals(this.route, that.route);
-        }
-
-        @java.lang.Override
-        public int hashCode() {
-            return java.util.Objects.hash(left, right, route);
-        }
-
-        @java.lang.Override
-        public String toString() {
-            return "TestContextRecord[" +
-                   "left=" + left + ", " +
-                   "right=" + right + ", " +
-                   "route=" + route + ']';
-        }
-    }
-
-	public Pattern getEnclosingPattern() {
+	public RecordPattern getEnclosingPattern() {
 		return this.enclosingPattern;
 	}
 
@@ -128,7 +86,7 @@ public abstract class Pattern extends Expression {
 		if (type instanceof TypeVariableBinding && type.superclass().isBoxedPrimitiveType())
 			type = type.superclass(); // when a boxing type is in supers it must be superclass, because all boxing types are classes
 		if (type.isPrimitiveOrBoxedPrimitiveType()) {
-			PrimitiveConversionRoute route = Pattern.findPrimitiveConversionRoute(this.resolvedType, type, scope);
+			PrimitiveConversionRoute route = findPrimitiveConversionRoute(this.resolvedType, type, scope);
 			switch (route) {
 				// JLS §5.7.2:
 				case IDENTITY_CONVERSION:
@@ -155,9 +113,26 @@ public abstract class Pattern extends Expression {
 		return false;
 	}
 
-	// Given a non-null instance of same type, would the pattern always match ?
-	public boolean matchFailurePossible() {
-		return false;
+	public boolean coversValue(Constant cst, BlockScope scope) {
+		if (!isUnguarded())
+			return false;
+		if (!(this.resolvedType.unboxedType() instanceof BaseTypeBinding baseType))
+			return false;
+		if (!cst.isExactTestingConversion(baseType))
+			return false;
+		int constantTypeID = cst.typeID();
+		PrimitiveConversionRoute route = findPrimitiveConversionRoute(baseType, TypeBinding.wellKnownBaseType(constantTypeID), scope);
+		switch (route) {
+			// JLS §5.7.2:
+			case NARROWING_PRIMITVE_CONVERSION:
+			case WIDENING_AND_NARROWING_PRIMITIVE_CONVERSION:
+				return true;
+			case WIDENING_PRIMITIVE_CONVERSION:
+				return BaseTypeBinding.isWidening(this.resolvedType.id, constantTypeID)
+						&& ! BaseTypeBinding.isExactWidening(this.resolvedType.id, constantTypeID);
+			default:
+				return false;
+		}
 	}
 
 	public boolean isUnconditional(TypeBinding t, Scope scope) {
@@ -165,11 +140,6 @@ public abstract class Pattern extends Expression {
 	}
 
 	public abstract void generateCode(BlockScope currentScope, CodeStream codeStream, BranchLabel patternMatchLabel, BranchLabel matchFailLabel);
-
-	public void generateTestingConversion(BlockScope scope, CodeStream codeStream) {
-		// TODO: MAKE THIS abstract
-	}
-
 
 	@Override
 	public boolean checkUnsafeCast(Scope scope, TypeBinding castType, TypeBinding expressionType, TypeBinding match, boolean isNarrowing) {
@@ -200,7 +170,7 @@ public abstract class Pattern extends Expression {
 			return false;
 		}
 		if (patternType.isBaseType()) {
-			PrimitiveConversionRoute route = Pattern.findPrimitiveConversionRoute(this.resolvedType, this.outerExpressionType, scope);
+			PrimitiveConversionRoute route = findPrimitiveConversionRoute(this.resolvedType, this.outerExpressionType, scope);
 			if (!TypeBinding.equalsEquals(expressionType, patternType)
 					&& route == PrimitiveConversionRoute.NO_CONVERSION_ROUTE) {
 				scope.problemReporter().notCompatibleTypesError(location, expressionType, patternType);
@@ -219,7 +189,7 @@ public abstract class Pattern extends Expression {
 		return true;
 	}
 
-	public abstract boolean dominates(Pattern p);
+	public abstract boolean dominates(Pattern p, Scope scope);
 
 	@Override
 	public StringBuilder print(int indent, StringBuilder output) {
@@ -246,47 +216,37 @@ public abstract class Pattern extends Expression {
 	public static boolean isBoxing(TypeBinding provided, TypeBinding expected) {
 
 		if (expected.isBaseType() && !provided.isBaseType()) {
-			int expectedId;
-			switch(expected.id) {
-				case T_char:
-					expectedId = T_JavaLangCharacter;
-					break;
-				case T_byte:
-					expectedId = T_JavaLangByte;
-					break;
-				case T_short:
-					expectedId = T_JavaLangShort;
-					break;
-				case T_boolean:
-					expectedId = T_JavaLangBoolean;
-					break;
-				case T_long:
-					expectedId = T_JavaLangLong;
-					break;
-				case T_double:
-					expectedId = T_JavaLangDouble;
-					break;
-				case T_float:
-					expectedId = T_JavaLangFloat;
-					break;
-				case T_int:
-					expectedId = T_JavaLangInteger;
-					break;
-				default:
-					expectedId = -1;
-					break;
-			}
+			int expectedId = switch(expected.id) {
+				case T_char     -> T_JavaLangCharacter;
+				case T_byte     -> T_JavaLangByte;
+				case T_short    -> T_JavaLangShort;
+				case T_boolean  -> T_JavaLangBoolean;
+				case T_long     -> T_JavaLangLong;
+				case T_double   -> T_JavaLangDouble;
+				case T_float    -> T_JavaLangFloat;
+				case T_int      -> T_JavaLangInteger;
+				default -> -1;
+			};
 			return provided.id == expectedId;
 		}
 		return false;
 	}
-	public static PrimitiveConversionRoute findPrimitiveConversionRoute(TypeBinding destinationType, TypeBinding expressionType, Scope scope) {
+	public static PrimitiveConversionRoute findPrimitiveConversionRoute(TypeBinding destinationType, TypeBinding expressionType, Scope scope, ASTNode location) {
 		if (!JavaFeature.PRIMITIVES_IN_PATTERNS.isSupported(scope.compilerOptions()))
 			return PrimitiveConversionRoute.NO_CONVERSION_ROUTE;
 		if (destinationType == null || expressionType == null)
 			return PrimitiveConversionRoute.NO_CONVERSION_ROUTE;
 		boolean destinationIsBaseType = destinationType.isBaseType();
 		boolean expressionIsBaseType = expressionType.isBaseType();
+		reporting: if ((expressionIsBaseType || destinationIsBaseType) &&
+				(expressionType.id != TypeIds.T_int || destinationType.id != TypeIds.T_int)) {
+			if (location instanceof Pattern pattern) {
+				if (pattern.previewReported)
+					break reporting;
+				pattern.previewReported = true;
+			}
+			scope.problemReporter().previewFeatureUsed(location.sourceStart, location.sourceEnd);
+		}
 		if (destinationIsBaseType && expressionIsBaseType) {
 			if (TypeBinding.equalsEquals(destinationType, expressionType)) {
 				return PrimitiveConversionRoute.IDENTITY_CONVERSION;
@@ -333,5 +293,9 @@ public abstract class Pattern extends Expression {
 			}
 		}
 		return PrimitiveConversionRoute.NO_CONVERSION_ROUTE;
+	}
+
+	public PrimitiveConversionRoute findPrimitiveConversionRoute(TypeBinding destinationType, TypeBinding expressionType, Scope scope) {
+		return findPrimitiveConversionRoute(destinationType, expressionType, scope, this);
 	}
 }

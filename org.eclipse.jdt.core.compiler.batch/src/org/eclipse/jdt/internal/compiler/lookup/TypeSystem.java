@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2013, 2019 IBM Corporation and others.
+ * Copyright (c) 2013, 2025 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -20,9 +20,9 @@
 package org.eclipse.jdt.internal.compiler.lookup;
 
 import java.util.HashMap;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.eclipse.jdt.internal.compiler.ast.ASTNode;
+import org.eclipse.jdt.internal.compiler.ast.Wildcard;
 import org.eclipse.jdt.internal.compiler.util.SimpleLookupTable;
 import org.eclipse.jdt.internal.compiler.util.Util;
 
@@ -69,7 +69,7 @@ public class TypeSystem {
 
 	public final class HashedParameterizedTypes {
 
-		private final class PTBKey extends ReferenceBinding { // extends ReferenceBinding so it can be used as wrapper
+		private final class PTBKey implements HotSwappable {
 			protected ReferenceBinding type; // must ensure the type is resolved
 			public TypeBinding[] arguments;
 			private ReferenceBinding enclosingType;
@@ -83,26 +83,9 @@ public class TypeSystem {
 					if (type instanceof UnresolvedReferenceBinding)
 						((UnresolvedReferenceBinding) type).addWrapper(this, environment);
 					if (arguments != null) {
-						for (int i = 0; i < arguments.length; i++) {
-							TypeBinding argument = arguments[i];
+						for (TypeBinding argument : arguments) {
 							if (argument instanceof UnresolvedReferenceBinding)
 								((UnresolvedReferenceBinding) argument).addWrapper(this, environment);
-							if (argument.hasNullTypeAnnotations())
-								this.tagBits |= TagBits.HasNullTypeAnnotation;
-							if (argument.getClass() == TypeVariableBinding.class) {
-								final int idx = i;
-								TypeVariableBinding typeVariableBinding = (TypeVariableBinding) argument;
-								Consumer<TypeVariableBinding> previousConsumer = typeVariableBinding.updateWhenSettingTypeAnnotations;
-								typeVariableBinding.updateWhenSettingTypeAnnotations = (newTvb) -> {
-									// update the TVB argument and simulate a re-hash:
-									ParameterizedTypeBinding[] value = HashedParameterizedTypes.this.hashedParameterizedTypes.get(this);
-									arguments[idx] = newTvb;
-									HashedParameterizedTypes.this.hashedParameterizedTypes.put(this, value);
-									// for the unlikely case of multiple PTBKeys referring to this TVB chain to the next consumer:
-									if (previousConsumer != null)
-										previousConsumer.accept(newTvb);
-								};
-							}
 						}
 					}
 				}
@@ -264,29 +247,6 @@ public class TypeSystem {
 		return this.types[type.id][0] = type;
 	}
 
-	/**
-	 * Forcefully register the given type as a derived type.
-	 * If it itself is already registered as the key unannotated type of its family,
-	 * create a clone to play that role from now on and swap types in the types cache.
-	 */
-	public void forceRegisterAsDerived(TypeVariableBinding derived) {
-		int id = derived.id;
-		if (id != TypeIds.NoId && this.types[id] != null) {
-			TypeBinding unannotated = this.types[id][0];
-			if (unannotated == derived) { //$IDENTITY-COMPARISON$
-				// was previously registered as unannotated, replace by a fresh clone to remain unannotated:
-				this.types[id][0] = unannotated = derived.clone(null);
-				if (derived.updateWhenSettingTypeAnnotations != null) {
-					derived.updateWhenSettingTypeAnnotations.accept((TypeVariableBinding) unannotated);
-				}
-			}
-			// proceed as normal:
-			cacheDerivedType(unannotated, derived);
-		} else {
-			throw new IllegalStateException("Type was not yet registered as expected: "+derived); //$NON-NLS-1$
-		}
-	}
-
 	// Given a type, return all its variously annotated versions.
 	public TypeBinding[] getAnnotatedTypes(TypeBinding type) {
 		return Binding.NO_TYPES;
@@ -414,6 +374,10 @@ public class TypeSystem {
 	public WildcardBinding getWildcard(ReferenceBinding genericType, int rank, TypeBinding bound, TypeBinding[] otherBounds, int boundKind) {
 		if (genericType == null) // pseudo wildcard denoting composite bounds for lub computation
 			genericType = ReferenceBinding.LUB_GENERIC;
+		if (boundKind == Wildcard.EXTENDS && bound != null && bound.id == TypeIds.T_JavaLangObject && otherBounds == null) {
+			boundKind = Wildcard.UNBOUND;
+			bound = null;
+		}
 
 		ReferenceBinding unannotatedGenericType = (ReferenceBinding) getUnannotatedType(genericType);
 		int otherBoundsLength = otherBounds == null ? 0: otherBounds.length;

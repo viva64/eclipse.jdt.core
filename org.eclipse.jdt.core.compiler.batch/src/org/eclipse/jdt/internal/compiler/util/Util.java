@@ -14,9 +14,7 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.util;
 
-import java.io.BufferedOutputStream;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
@@ -43,6 +41,8 @@ import org.eclipse.jdt.internal.compiler.batch.FileSystem.Classpath;
 import org.eclipse.jdt.internal.compiler.batch.Main;
 import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
+import org.eclipse.jdt.internal.compiler.lookup.AnnotationBinding;
+import org.eclipse.jdt.internal.compiler.lookup.Binding;
 import org.eclipse.jdt.internal.compiler.lookup.ExtraCompilerModifiers;
 import org.eclipse.jdt.internal.compiler.lookup.ParameterizedTypeBinding;
 import org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding;
@@ -231,7 +231,6 @@ public class Util implements SuffixConstants {
 		String displayString(Object o);
 	}
 
-	private static final int DEFAULT_WRITING_SIZE = 1024;
 	public final static String UTF_8 = "UTF-8";	//$NON-NLS-1$
 	public static final String LINE_SEPARATOR = System.getProperty("line.separator"); //$NON-NLS-1$
 
@@ -241,6 +240,14 @@ public class Util implements SuffixConstants {
 	 */
 	public static final String COMMA_SEPARATOR = new String(CharOperation.COMMA_SEPARATOR);
 	public static final int[] EMPTY_INT_ARRAY= new int[0];
+
+	/**
+	 * The jar entry path under which JDK expects compiler to place class files for multi-release JARs. See
+	 * https://docs.oracle.com/javase/9/docs/specs/jar/jar.html#multi-release-jar-files.
+	 * <p>
+	 * The value is "META-INF/versions/".
+	 */
+	public static String METAINF_VERSIONS = "META-INF/versions/"; //$NON-NLS-1$
 
 	/**
 	 * Build all the directories and subdirectories corresponding to the packages names
@@ -397,9 +404,9 @@ public class Util implements SuffixConstants {
 	public static char[] getFileCharContent(File file, String encoding) throws IOException {
 		return org.eclipse.jdt.internal.compiler.util.Util.getBytesAsCharArray(Files.readAllBytes(file.toPath()), encoding);
 	}
-	private static FileOutputStream getFileOutputStream(boolean generatePackagesStructure, String outputPath, String relativeFileName) throws IOException {
+	private static File getFile(boolean generatePackagesStructure, String outputPath, String relativeFileName) throws IOException {
 		if (generatePackagesStructure) {
-			return new FileOutputStream(new File(buildAllDirectoriesInto(outputPath, relativeFileName)));
+			return new File(buildAllDirectoriesInto(outputPath, relativeFileName));
 		} else {
 			String fileName = null;
 			char fileSeparatorChar = File.separatorChar;
@@ -422,7 +429,7 @@ public class Util implements SuffixConstants {
 					fileName = outputPath + fileSeparator + relativeFileName.substring(indexOfPackageSeparator + 1, length);
 				}
 			}
-			return new FileOutputStream(new File(fileName));
+			return new File(fileName);
 		}
 	}
 
@@ -467,11 +474,15 @@ public class Util implements SuffixConstants {
 
 	public static char[] getBytesAsCharArray(byte[] byteContents, String encoding) {
 		Charset charset;
-		try {
-			charset = Charset.forName(encoding);
-		} catch (IllegalArgumentException e) {
-			// encoding is not supported
+		if (encoding == null) {
 			charset = Charset.defaultCharset();
+		} else {
+			try {
+				charset = Charset.forName(encoding);
+			} catch (IllegalArgumentException e) {
+				// encoding is not supported
+				charset = Charset.defaultCharset();
+			}
 		}
 
 		// check for BOM in encoded byte content
@@ -915,34 +926,14 @@ public class Util implements SuffixConstants {
 	 * @param relativeFileName the given relative file name
 	 * @param classFile the given classFile to write
 	 */
-	public static void writeToDisk(boolean generatePackagesStructure, String outputPath, String relativeFileName, ClassFile classFile) throws IOException {
-		FileOutputStream file = getFileOutputStream(generatePackagesStructure, outputPath, relativeFileName);
-		/* use java.nio to write
-		if (true) {
-			FileChannel ch = file.getChannel();
-			try {
-				ByteBuffer buffer = ByteBuffer.allocate(classFile.headerOffset + classFile.contentsOffset);
-				buffer.put(classFile.header, 0, classFile.headerOffset);
-				buffer.put(classFile.contents, 0, classFile.contentsOffset);
-				buffer.flip();
-				while (true) {
-					if (ch.write(buffer) == 0) break;
-				}
-			} finally {
-				ch.close();
-			}
-			return;
-		}
-		*/
-		try (BufferedOutputStream output = new BufferedOutputStream(file, DEFAULT_WRITING_SIZE)) {
-			// if no IOException occured, output cannot be null
-			output.write(classFile.header, 0, classFile.headerOffset);
-			output.write(classFile.contents, 0, classFile.contentsOffset);
-			output.flush();
-		} catch(IOException e) {
-			throw e;
-		}
+	public static void writeToDisk(boolean generatePackagesStructure, String outputPath, String relativeFileName,
+			ClassFile classFile) throws IOException {
+		File file = getFile(generatePackagesStructure, outputPath, relativeFileName);
+		byte[] bytes = Arrays.copyOf(classFile.header, classFile.headerOffset + classFile.contentsOffset);
+		System.arraycopy(classFile.contents, 0, bytes, classFile.headerOffset, classFile.contentsOffset);
+		Files.write(file.toPath(), bytes);
 	}
+
 	@SuppressWarnings({ "rawtypes", "unchecked" })
 	public static void recordNestedType(ClassFile classFile, TypeBinding typeBinding) {
 		if (classFile.visitedTypes == null) {
@@ -1539,6 +1530,12 @@ public class Util implements SuffixConstants {
 				return false;
 		}
 		return true;
+	}
+
+	public static boolean effectivelyEqual(AnnotationBinding [] one, AnnotationBinding [] two) {
+		if (one == Binding.AWAITED_ANNOTATIONS || two == Binding.AWAITED_ANNOTATIONS)
+			return one == two;
+		return effectivelyEqual((Object []) one, (Object []) two);
 	}
 
 	public static void appendEscapedChar(StringBuilder buffer, char c, boolean stringLiteral) {

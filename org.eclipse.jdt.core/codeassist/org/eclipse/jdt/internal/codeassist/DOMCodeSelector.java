@@ -20,54 +20,9 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
 import org.eclipse.core.runtime.NullProgressMonitor;
-import org.eclipse.jdt.core.Flags;
-import org.eclipse.jdt.core.IField;
-import org.eclipse.jdt.core.IJavaElement;
-import org.eclipse.jdt.core.IJavaModelStatusConstants;
-import org.eclipse.jdt.core.IJavaProject;
-import org.eclipse.jdt.core.ILocalVariable;
-import org.eclipse.jdt.core.IMethod;
-import org.eclipse.jdt.core.IPackageFragment;
-import org.eclipse.jdt.core.IParent;
-import org.eclipse.jdt.core.ISourceRange;
-import org.eclipse.jdt.core.ISourceReference;
-import org.eclipse.jdt.core.IType;
-import org.eclipse.jdt.core.JavaModelException;
-import org.eclipse.jdt.core.WorkingCopyOwner;
-import org.eclipse.jdt.core.dom.ASTNode;
-import org.eclipse.jdt.core.dom.AbstractTypeDeclaration;
-import org.eclipse.jdt.core.dom.ClassInstanceCreation;
-import org.eclipse.jdt.core.dom.Comment;
-import org.eclipse.jdt.core.dom.ConstructorInvocation;
-import org.eclipse.jdt.core.dom.ExpressionMethodReference;
-import org.eclipse.jdt.core.dom.FieldAccess;
-import org.eclipse.jdt.core.dom.IBinding;
-import org.eclipse.jdt.core.dom.IMethodBinding;
-import org.eclipse.jdt.core.dom.IPackageBinding;
-import org.eclipse.jdt.core.dom.ITypeBinding;
-import org.eclipse.jdt.core.dom.IVariableBinding;
-import org.eclipse.jdt.core.dom.Javadoc;
-import org.eclipse.jdt.core.dom.LambdaExpression;
-import org.eclipse.jdt.core.dom.MethodDeclaration;
-import org.eclipse.jdt.core.dom.MethodInvocation;
-import org.eclipse.jdt.core.dom.MethodReference;
-import org.eclipse.jdt.core.dom.Name;
-import org.eclipse.jdt.core.dom.NodeFinder;
-import org.eclipse.jdt.core.dom.ParameterizedType;
-import org.eclipse.jdt.core.dom.QualifiedName;
-import org.eclipse.jdt.core.dom.QualifiedType;
-import org.eclipse.jdt.core.dom.SimpleName;
-import org.eclipse.jdt.core.dom.SimpleType;
-import org.eclipse.jdt.core.dom.SingleVariableDeclaration;
-import org.eclipse.jdt.core.dom.SuperConstructorInvocation;
-import org.eclipse.jdt.core.dom.SuperMethodInvocation;
-import org.eclipse.jdt.core.dom.TagElement;
-import org.eclipse.jdt.core.dom.Type;
-import org.eclipse.jdt.core.dom.TypeMethodReference;
-import org.eclipse.jdt.core.dom.VariableDeclaration;
-import org.eclipse.jdt.core.dom.VariableDeclarationFragment;
+import org.eclipse.jdt.core.*;
+import org.eclipse.jdt.core.dom.*;
 import org.eclipse.jdt.core.search.IJavaSearchConstants;
 import org.eclipse.jdt.core.search.IJavaSearchScope;
 import org.eclipse.jdt.core.search.SearchEngine;
@@ -105,7 +60,7 @@ public class DOMCodeSelector {
 		if (offset + length > this.unit.getSource().length()) {
 			throw new JavaModelException(new IndexOutOfBoundsException(offset + length), IJavaModelStatusConstants.INDEX_OUT_OF_BOUNDS);
 		}
-		org.eclipse.jdt.core.dom.CompilationUnit currentAST = this.unit.getOrBuildAST(this.owner);
+		org.eclipse.jdt.core.dom.CompilationUnit currentAST = this.unit.getOrBuildAST(this.owner, this.unit.getBuffer().getLength() < 50000 ? -1 : offset);
 		if (currentAST == null) {
 			return new IJavaElement[0];
 		}
@@ -158,23 +113,17 @@ public class DOMCodeSelector {
 			} while (changed);
 		}
 		String trimmedText = rawText.trim();
-		NodeFinder finder = new NodeFinder(currentAST, offset, length);
-		final ASTNode node = finder.getCoveredNode() != null && finder.getCoveredNode().getStartPosition() > offset && finder.getCoveringNode().getStartPosition() + finder.getCoveringNode().getLength() > offset + length ?
-			finder.getCoveredNode() :
-			finder.getCoveringNode();
-		if (node instanceof TagElement && TagElement.TAG_INHERITDOC.equals(((TagElement) node).getTagName())) {
-            TagElement tagElement = (TagElement) node;
-            ASTNode javadocNode = node;
+		final ASTNode node = NodeFinder.perform(currentAST, offset, length);
+		if (node instanceof TagElement tagElement && TagElement.TAG_INHERITDOC.equals(tagElement.getTagName())) {
+			ASTNode javadocNode = node;
 			while (javadocNode != null && !(javadocNode instanceof Javadoc)) {
 				javadocNode = javadocNode.getParent();
 			}
-			if (javadocNode instanceof Javadoc) {
-                Javadoc javadoc = (Javadoc) javadocNode;
-                ASTNode parent = javadoc.getParent();
+			if (javadocNode instanceof Javadoc javadoc) {
+				ASTNode parent = javadoc.getParent();
 				IBinding binding = resolveBinding(parent);
-				if (binding instanceof IMethodBinding) {
-                    IMethodBinding methodBinding = (IMethodBinding) binding;
-                    var typeBinding = methodBinding.getDeclaringClass();
+				if (binding instanceof IMethodBinding methodBinding) {
+					var typeBinding = methodBinding.getDeclaringClass();
 					if (typeBinding != null) {
 						List<ITypeBinding> types = new ArrayList<>(Arrays.asList(typeBinding.getInterfaces()));
 						if (typeBinding.getSuperclass() != null) {
@@ -182,10 +131,9 @@ public class DOMCodeSelector {
 						}
 						while (!types.isEmpty()) {
 							ITypeBinding type = types.remove(0);
-							for (IMethodBinding m : Arrays.stream(type.getDeclaredMethods()).filter(methodBinding::overrides).collect(java.util.stream.Collectors.toUnmodifiableList())) {
-								if (m.getJavaElement() instanceof IMethod && ((IMethod) m.getJavaElement()).getJavadocRange() != null) {
-                                    IMethod methodElement = (IMethod) m.getJavaElement();
-                                    return new IJavaElement[] { methodElement };
+							for (IMethodBinding m : Arrays.stream(type.getDeclaredMethods()).filter(methodBinding::overrides).toList()) {
+								if (m.getJavaElement() instanceof IMethod methodElement && methodElement.getJavadocRange() != null) {
+									return new IJavaElement[] { methodElement };
 								} else {
 									types.addAll(Arrays.asList(type.getInterfaces()));
 									if (type.getSuperclass() != null) {
@@ -203,30 +151,25 @@ public class DOMCodeSelector {
 			}
 		}
 		org.eclipse.jdt.core.dom.ImportDeclaration importDecl = findImportDeclaration(node);
-		if (node instanceof ExpressionMethodReference &&
-            ((ExpressionMethodReference) node).getExpression().getStartPosition() + ((ExpressionMethodReference) node).getExpression().getLength() <= offset && offset + length <= ((ExpressionMethodReference) node).getName().getStartPosition()) {
-            ExpressionMethodReference emr = (ExpressionMethodReference) node;
-            if (!(rawText.isEmpty() || rawText.equals(":") || rawText.equals("::"))) { //$NON-NLS-1$ //$NON-NLS-2$
+		if (node instanceof ExpressionMethodReference emr &&
+			emr.getExpression().getStartPosition() + emr.getExpression().getLength() <= offset && offset + length <= emr.getName().getStartPosition()) {
+			if (!(rawText.isEmpty() || rawText.equals(":") || rawText.equals("::"))) { //$NON-NLS-1$ //$NON-NLS-2$
 				return new IJavaElement[0];
 			}
-			if (emr.getParent() instanceof MethodInvocation) {
-                MethodInvocation methodInvocation = (MethodInvocation) emr.getParent();
-                int index = methodInvocation.arguments().indexOf(emr);
+			if (emr.getParent() instanceof MethodInvocation methodInvocation) {
+				int index = methodInvocation.arguments().indexOf(emr);
 				return new IJavaElement[] {methodInvocation.resolveMethodBinding().getParameterTypes()[index].getDeclaredMethods()[0].getJavaElement()};
 			}
-			if (emr.getParent() instanceof VariableDeclaration) {
-                VariableDeclaration variableDeclaration = (VariableDeclaration) emr.getParent();
-                ITypeBinding requestedType = variableDeclaration.resolveBinding().getType();
+			if (emr.getParent() instanceof VariableDeclaration variableDeclaration) {
+				ITypeBinding requestedType = variableDeclaration.resolveBinding().getType();
 				if (requestedType.getDeclaredMethods().length == 1
-                    && requestedType.getDeclaredMethods()[0].getJavaElement() instanceof IMethod) {
-                    IMethod overridenMethod = (IMethod) requestedType.getDeclaredMethods()[0].getJavaElement();
-                    return new IJavaElement[] { overridenMethod };
+					&& requestedType.getDeclaredMethods()[0].getJavaElement() instanceof IMethod overridenMethod) {
+					return new IJavaElement[] { overridenMethod };
 				}
 			}
 		}
-		if (node instanceof LambdaExpression) {
-            LambdaExpression lambda = (LambdaExpression) node;
-            if (!(rawText.isEmpty() || rawText.equals("-") || rawText.equals(">") || rawText.equals("->"))) { //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+		if (node instanceof LambdaExpression lambda) {
+			if (!(rawText.isEmpty() || rawText.equals("-") || rawText.equals(">") || rawText.equals("->"))) { //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
 				return new IJavaElement[0]; // as requested by some tests
 			}
 			if (lambda.resolveMethodBinding() != null
@@ -237,9 +180,8 @@ public class DOMCodeSelector {
 		}
 		if (importDecl != null && importDecl.isStatic()) {
 			IBinding importBinding = importDecl.resolveBinding();
-			if (importBinding instanceof IMethodBinding) {
-                IMethodBinding methodBinding = (IMethodBinding) importBinding;
-                ArrayDeque<IJavaElement> overloadedMethods = Stream.of(methodBinding.getDeclaringClass().getDeclaredMethods()) //
+			if (importBinding instanceof IMethodBinding methodBinding) {
+				ArrayDeque<IJavaElement> overloadedMethods = Stream.of(methodBinding.getDeclaringClass().getDeclaredMethods()) //
 						.filter(otherMethodBinding -> methodBinding.getName().equals(otherMethodBinding.getName())) //
 						.map(IMethodBinding::getJavaElement) //
 						.filter(IJavaElement::exists)
@@ -252,44 +194,42 @@ public class DOMCodeSelector {
 				return reorderedOverloadedMethods;
 			}
 			return new IJavaElement[] { importBinding.getJavaElement() };
+		} else if (node instanceof MethodDeclaration decl && offset > decl.getName().getStartPosition()) {
+			// most likely inside and empty `()`
+			// case for TypeHierarchyCommandTest.testTypeHierarchy()
+			return null;
 		} else if (findTypeDeclaration(node) == null) {
 			IBinding binding = resolveBinding(node);
 			if (binding != null && !binding.isRecovered()) {
+				ITypeBinding declaringClass;
 				if (node instanceof SuperMethodInvocation && // on `super`
-                    binding instanceof IMethodBinding &&
-                    ((IMethodBinding) binding).getDeclaringClass() instanceof ITypeBinding &&
-                    ((ITypeBinding) ((IMethodBinding) binding).getDeclaringClass()).getJavaElement() instanceof IType) {
-                    IType type = (IType) ((ITypeBinding) ((IMethodBinding) binding).getDeclaringClass()).getJavaElement();
-                    ITypeBinding typeBinding = (ITypeBinding) ((IMethodBinding) binding).getDeclaringClass();
-                    IMethodBinding methodBinding = (IMethodBinding) binding;
-                    return new IJavaElement[] { type };
+					binding instanceof IMethodBinding methodBinding &&
+					(declaringClass = methodBinding.getDeclaringClass()) != null &&
+					declaringClass.getJavaElement() instanceof IType type) {
+					return new IJavaElement[] { type };
 				}
-				if (binding instanceof IPackageBinding
-                    && trimmedText.length() > 0
-                    && !trimmedText.equals(((IPackageBinding) binding).getName())
-                    && ((IPackageBinding) binding).getName().startsWith(trimmedText)) {
-                    IPackageBinding packageBinding = (IPackageBinding) binding;
-                    // resolved a too wide node for package name, restrict to selected name only
+				if (binding instanceof IPackageBinding packageBinding
+						&& trimmedText.length() > 0
+						&& !trimmedText.equals(packageBinding.getName())
+						&& packageBinding.getName().startsWith(trimmedText)) {
+					// resolved a too wide node for package name, restrict to selected name only
 					IJavaElement fragment = this.unit.getJavaProject().findPackageFragment(trimmedText);
 					if (fragment != null) {
 						return new IJavaElement[] { fragment };
 					}
 				}
 				// workaround https://github.com/eclipse-jdt/eclipse.jdt.core/issues/2177
-				if (binding instanceof IVariableBinding &&
-                    ((IVariableBinding) binding).getDeclaringMethod() instanceof IMethodBinding &&
-                    ((IMethodBinding) ((IVariableBinding) binding).getDeclaringMethod()).isCompactConstructor() &&
-                    Arrays.stream(((IMethodBinding) ((IVariableBinding) binding).getDeclaringMethod()).getParameterNames()).anyMatch(((IVariableBinding) binding).getName()::equals) &&
-                    ((IMethodBinding) ((IVariableBinding) binding).getDeclaringMethod()).getDeclaringClass() instanceof ITypeBinding &&
-                    ((ITypeBinding) ((IMethodBinding) ((IVariableBinding) binding).getDeclaringMethod()).getDeclaringClass()).isRecord() &&
-                    ((ITypeBinding) ((IMethodBinding) ((IVariableBinding) binding).getDeclaringMethod()).getDeclaringClass()).getJavaElement() instanceof IType &&
-                    ((IType) ((ITypeBinding) ((IMethodBinding) ((IVariableBinding) binding).getDeclaringMethod()).getDeclaringClass()).getJavaElement()).getField(((IVariableBinding) binding).getName()) instanceof SourceField) {
-                    IType recordType = (IType) ((ITypeBinding) ((IMethodBinding) ((IVariableBinding) binding).getDeclaringMethod()).getDeclaringClass()).getJavaElement();
-                    SourceField field = (SourceField) recordType.getField(((IVariableBinding) binding).getName());
-                    ITypeBinding recordBinding = (ITypeBinding) ((IMethodBinding) ((IVariableBinding) binding).getDeclaringMethod()).getDeclaringClass();
-                    IMethodBinding declaringMethod = (IMethodBinding) ((IVariableBinding) binding).getDeclaringMethod();
-                    IVariableBinding variableBinding = (IVariableBinding) binding;
-                    // the parent must be the field and not the method
+				IMethodBinding declaringMethod;
+				ITypeBinding recordBinding;
+				if (binding instanceof IVariableBinding variableBinding &&
+					(declaringMethod = variableBinding.getDeclaringMethod()) != null  &&
+					declaringMethod.isCompactConstructor() &&
+					Arrays.stream(declaringMethod.getParameterNames()).anyMatch(variableBinding.getName()::equals) &&
+					(recordBinding = declaringMethod.getDeclaringClass()) != null &&
+					recordBinding.isRecord() &&
+					recordBinding.getJavaElement() instanceof IType recordType &&
+					recordType.getField(variableBinding.getName()) instanceof SourceField field) {
+					// the parent must be the field and not the method
 					return new IJavaElement[] { new LocalVariable(field,
 						variableBinding.getName(),
 						0, // must be 0 for subsequent call to LocalVariableLocator.matchLocalVariable() to work
@@ -301,10 +241,9 @@ public class DOMCodeSelector {
 						field.getFlags(),
 						true) };
 				}
-				if (binding instanceof ITypeBinding &&
-                    ((ITypeBinding) binding).isIntersectionType()) {
-                    ITypeBinding typeBinding = (ITypeBinding) binding;
-                    return Arrays.stream(typeBinding.getTypeBounds())
+				if (binding instanceof ITypeBinding typeBinding &&
+					typeBinding.isIntersectionType()) {
+					return Arrays.stream(typeBinding.getTypeBounds())
 							.map(ITypeBinding::getJavaElement)
 							.filter(Objects::nonNull)
 							.toArray(IJavaElement[]::new);
@@ -313,9 +252,8 @@ public class DOMCodeSelector {
 				if (element != null && (element instanceof IPackageFragment || element.exists())) {
 					return new IJavaElement[] { element };
 				}
-				if (binding instanceof ITypeBinding) {
-                    ITypeBinding typeBinding = (ITypeBinding) binding;
-                    if (this.unit.getJavaProject() != null) {
+				if (binding instanceof ITypeBinding typeBinding) {
+					if (this.unit.getJavaProject() != null) {
 						IType type = this.unit.getJavaProject().findType(typeBinding.getQualifiedName());
 						if (type != null) {
 							return new IJavaElement[] { type };
@@ -327,32 +265,31 @@ public class DOMCodeSelector {
 						return indexMatch;
 					}
 				}
-				if (binding instanceof IVariableBinding && ((IVariableBinding) binding).getDeclaringMethod() != null && ((IVariableBinding) binding).getDeclaringMethod().isCompactConstructor()) {
-                    IVariableBinding variableBinding = (IVariableBinding) binding;
-                    // workaround for JavaSearchBugs15Tests.testBug558812_012
-					if (variableBinding.getDeclaringMethod().getJavaElement() instanceof IMethod) {
-                        IMethod method = (IMethod) variableBinding.getDeclaringMethod().getJavaElement();
-                        Optional<ILocalVariable> parameter = Arrays.stream(method.getParameters()).filter(param -> Objects.equals(param.getElementName(), variableBinding.getName())).findAny();
+				if (binding instanceof IVariableBinding variableBinding && variableBinding.getDeclaringMethod() != null && variableBinding.getDeclaringMethod().isCompactConstructor()) {
+					// workaround for JavaSearchBugs15Tests.testBug558812_012
+					if (variableBinding.getDeclaringMethod().getJavaElement() instanceof IMethod method) {
+						Optional<ILocalVariable> parameter = Arrays.stream(method.getParameters()).filter(param -> Objects.equals(param.getElementName(), variableBinding.getName())).findAny();
 						if (parameter.isPresent()) {
 							return new IJavaElement[] { parameter.get() };
 						}
 					}
 				}
-				if (binding instanceof IMethodBinding &&
-                    ((IMethodBinding) binding).isSyntheticRecordMethod() &&
-                    ((IMethodBinding) binding).getDeclaringClass().getJavaElement() instanceof IType &&
-                    ((IType) ((IMethodBinding) binding).getDeclaringClass().getJavaElement()).getField(((IMethodBinding) binding).getName()) instanceof IField) {
-                    IField field = (IField) ((IType) ((IMethodBinding) binding).getDeclaringClass().getJavaElement()).getField(((IMethodBinding) binding).getName());
-                    IType recordType = (IType) ((IMethodBinding) binding).getDeclaringClass().getJavaElement();
-                    IMethodBinding methodBinding = (IMethodBinding) binding;
-                    return new IJavaElement[] { field };
+				IField field;
+				if (binding instanceof IMethodBinding methodBinding &&
+					methodBinding.isSyntheticRecordMethod() &&
+					methodBinding.getDeclaringClass().getJavaElement() instanceof IType recordType &&
+					(field = recordType.getField(methodBinding.getName())) != null) {
+					return new IJavaElement[] { field };
 				}
 				ASTNode bindingNode = currentAST.findDeclaringNode(binding);
 				if (bindingNode != null) {
 					IJavaElement parent = this.unit.getElementAt(bindingNode.getStartPosition());
-					if (parent != null && bindingNode instanceof SingleVariableDeclaration) {
-                        SingleVariableDeclaration variableDecl = (SingleVariableDeclaration) bindingNode;
-                        return new IJavaElement[] { DOMToModelPopulator.toLocalVariable(variableDecl, (JavaElement)parent) };
+					if (parent != null && bindingNode instanceof SingleVariableDeclaration variableDecl) {
+						return new IJavaElement[] { DOMToModelPopulator.toLocalVariable(variableDecl, (JavaElement)parent) };
+					}
+					if( parent != null && bindingNode instanceof VariableDeclarationFragment vdf) {
+						// Parent might be statement or expression
+						return new IJavaElement[] { DOMToModelPopulator.toLocalVariable(vdf, (JavaElement)parent) };
 					}
 				}
 			}
@@ -364,9 +301,10 @@ public class DOMCodeSelector {
 		int finalLength = length;
 		do {
 			newChildFound = false;
-			if (currentElement instanceof IParent) {
-                IParent parentElement = (IParent) currentElement;
-                Optional<IJavaElement> candidate = Stream.of(parentElement.getChildren())
+			boolean isGeneratedByLombok = isGenerated(currentAST);
+			if (currentElement instanceof IParent parentElement) {
+				Optional<IJavaElement> candidate = Stream.of(parentElement.getChildren())
+					.filter(e -> (!isGeneratedByLombok || e.getElementName().equals(trimmedText)))
 					.filter(ISourceReference.class::isInstance)
 					.map(ISourceReference.class::cast)
 					.filter(sourceRef -> {
@@ -387,16 +325,15 @@ public class DOMCodeSelector {
 				}
 			}
 		} while (newChildFound);
-		if (currentElement instanceof JavaElement &&
-            ((JavaElement) currentElement).getElementInfo() instanceof AnnotatableInfo &&
-            ((AnnotatableInfo) ((JavaElement) currentElement).getElementInfo()).getNameSourceStart() >= 0 &&
-            ((AnnotatableInfo) ((JavaElement) currentElement).getElementInfo()).getNameSourceStart() <= offset &&
-            ((AnnotatableInfo) ((JavaElement) currentElement).getElementInfo()).getNameSourceEnd() + 1 /* end exclusive vs offset inclusive */ >= offset) {
-            AnnotatableInfo annotable = (AnnotatableInfo) ((JavaElement) currentElement).getElementInfo();
-            JavaElement impl = (JavaElement) currentElement;
-            return new IJavaElement[] { currentElement };
+		if (currentElement instanceof JavaElement impl &&
+				impl.getElementInfo() instanceof AnnotatableInfo annotable &&
+				annotable.getNameSourceStart() >= 0 &&
+				annotable.getNameSourceStart() <= offset &&
+				annotable.getNameSourceEnd() + 1 /* end exclusive vs offset inclusive */ >= offset) {
+			return new IJavaElement[] { currentElement };
 		}
 		if (insideComment) {
+			IType type;
 			String toSearch = trimmedText.isBlank() ? findWord(offset) : trimmedText;
 			String resolved = ((List<org.eclipse.jdt.core.dom.ImportDeclaration>)currentAST.imports()).stream()
 				.map(org.eclipse.jdt.core.dom.ImportDeclaration::getName)
@@ -404,9 +341,8 @@ public class DOMCodeSelector {
 				.filter(importedPackage -> importedPackage.endsWith(toSearch))
 				.findAny()
 				.orElse(toSearch);
-			if (this.unit.getJavaProject().findType(resolved) instanceof IType) {
-                IType type = (IType) this.unit.getJavaProject().findType(resolved);
-                return new IJavaElement[] { type };
+			if ((type = this.unit.getJavaProject().findType(resolved)) != null) {
+				return new IJavaElement[] { type };
 			}
 		}
 		// failback to lookup search
@@ -414,9 +350,8 @@ public class DOMCodeSelector {
 		while (currentNode != null && !(currentNode instanceof Type)) {
 			currentNode = currentNode.getParent();
 		}
-		if (currentNode instanceof Type) {
-            Type parentType = (Type) currentNode;
-            if (this.unit.getJavaProject() != null) {
+		if (currentNode instanceof Type parentType) {
+			if (this.unit.getJavaProject() != null) {
 				StringBuilder buffer = new StringBuilder();
 				Util.getFullyQualifiedName(parentType, buffer);
 				IType type = this.unit.getJavaProject().findType(buffer.toString());
@@ -424,15 +359,15 @@ public class DOMCodeSelector {
 					return new IJavaElement[] { type };
 				}
 			}
-			String packageName = parentType instanceof QualifiedType ? ((QualifiedType) parentType).getQualifier().toString() :
-                    parentType instanceof SimpleType ?
-                            ((SimpleType) parentType).getName() instanceof QualifiedName ? ((QualifiedName) ((SimpleType) parentType).getName()).getQualifier().toString() :
+			String packageName = parentType instanceof QualifiedType qType ? qType.getQualifier().toString() :
+				parentType instanceof SimpleType sType ?
+					sType.getName() instanceof QualifiedName qName ? qName.getQualifier().toString() :
 					null :
 				null;
-			String simpleName = parentType instanceof QualifiedType ? ((QualifiedType) parentType).getName().toString() :
-                    parentType instanceof SimpleType ?
-                            ((SimpleType) parentType).getName() instanceof SimpleName ? ((SimpleName) ((SimpleType) parentType).getName()).getIdentifier() :
-                                    ((SimpleType) parentType).getName() instanceof QualifiedName ? ((QualifiedName) ((SimpleType) parentType).getName()).getName().toString() :
+			String simpleName = parentType instanceof QualifiedType qType ? qType.getName().toString() :
+				parentType instanceof SimpleType sType ?
+					sType.getName() instanceof SimpleName sName ? sName.getIdentifier() :
+					sType.getName() instanceof QualifiedName qName ? qName.getName().toString() :
 					null :
 				null;
 			IJavaElement[] indexResult = findTypeInIndex(packageName, simpleName);
@@ -444,30 +379,24 @@ public class DOMCodeSelector {
 		return new IJavaElement[0];
 	}
 
-	static IBinding resolveBinding(ASTNode node) {
-		if (node instanceof MethodDeclaration) {
-            MethodDeclaration decl = (MethodDeclaration) node;
-            return decl.resolveBinding();
+	public static IBinding resolveBinding(ASTNode node) {
+		if (node instanceof MethodDeclaration decl) {
+			return decl.resolveBinding();
 		}
-		if (node instanceof MethodInvocation) {
-            MethodInvocation invocation = (MethodInvocation) node;
-            return invocation.resolveMethodBinding();
+		if (node instanceof MethodInvocation invocation) {
+			return invocation.resolveMethodBinding();
 		}
-		if (node instanceof VariableDeclaration) {
-            VariableDeclaration decl = (VariableDeclaration) node;
-            return decl.resolveBinding();
+		if (node instanceof VariableDeclaration decl) {
+			return decl.resolveBinding();
 		}
-		if (node instanceof FieldAccess) {
-            FieldAccess access = (FieldAccess) node;
-            return access.resolveFieldBinding();
+		if (node instanceof FieldAccess access) {
+			return access.resolveFieldBinding();
 		}
-		if (node instanceof Type) {
-            Type type = (Type) node;
-            return type.resolveBinding();
+		if (node instanceof Type type) {
+			return type.resolveBinding();
 		}
-		if (node instanceof Name) {
-            Name aName = (Name) node;
-            ClassInstanceCreation newInstance = findConstructor(aName);
+		if (node instanceof Name aName) {
+			ClassInstanceCreation newInstance = findConstructor(aName);
 			if (newInstance != null) {
 				var constructorBinding = newInstance.resolveConstructorBinding();
 				if (constructorBinding != null) {
@@ -505,13 +434,11 @@ public class DOMCodeSelector {
 					}
 				}
 			}
-			if (node.getParent() instanceof ExpressionMethodReference && ((ExpressionMethodReference) node.getParent()).getName() == node) {
-                ExpressionMethodReference exprMethodReference = (ExpressionMethodReference) node.getParent();
-                return resolveBinding(exprMethodReference);
+			if (node.getParent() instanceof ExpressionMethodReference exprMethodReference && exprMethodReference.getName() == node) {
+				return resolveBinding(exprMethodReference);
 			}
-			if (node.getParent() instanceof TypeMethodReference && ((TypeMethodReference) node.getParent()).getName() == node) {
-                TypeMethodReference typeMethodReference = (TypeMethodReference) node.getParent();
-                return resolveBinding(typeMethodReference);
+			if (node.getParent() instanceof TypeMethodReference typeMethodReference && typeMethodReference.getName() == node) {
+				return resolveBinding(typeMethodReference);
 			}
 			IBinding res = aName.resolveBinding();
 			if (res != null) {
@@ -519,20 +446,18 @@ public class DOMCodeSelector {
 			}
 			return resolveBinding(aName.getParent());
 		}
-		if (node instanceof org.eclipse.jdt.core.dom.LambdaExpression) {
-            org.eclipse.jdt.core.dom.LambdaExpression lambda = (org.eclipse.jdt.core.dom.LambdaExpression) node;
-            return lambda.resolveMethodBinding();
+		if (node instanceof org.eclipse.jdt.core.dom.LambdaExpression lambda) {
+			return lambda.resolveMethodBinding();
 		}
-		if (node instanceof ExpressionMethodReference) {
-            ExpressionMethodReference methodRef = (ExpressionMethodReference) node;
-            IMethodBinding methodBinding = methodRef.resolveMethodBinding();
+		if (node instanceof ExpressionMethodReference methodRef) {
+			IMethodBinding methodBinding = methodRef.resolveMethodBinding();
 			try {
 				if (methodBinding == null) {
 					return null;
 				}
 				IMethod methodModel = ((IMethod)methodBinding.getJavaElement());
 				boolean allowExtraParam = true;
-				if ((methodModel.getFlags() & Flags.AccStatic) != 0) {
+				if (methodModel != null && (methodModel.getFlags() & Flags.AccStatic) != 0) {
 					allowExtraParam = false;
 					if (methodRef.getExpression() instanceof ClassInstanceCreation) {
 						return null;
@@ -543,18 +468,22 @@ public class DOMCodeSelector {
 				ITypeBinding type = null;
 				ASTNode cursor = methodRef;
 				while (type == null && cursor != null) {
-					if (cursor.getParent() instanceof VariableDeclarationFragment) {
-                        VariableDeclarationFragment declFragment = (VariableDeclarationFragment) cursor.getParent();
-                        type = declFragment.resolveBinding().getType();
-					}
-					else if (cursor.getParent() instanceof MethodInvocation) {
-                        MethodInvocation methodInvocation = (MethodInvocation) cursor.getParent();
-                        IMethodBinding methodInvocationBinding = methodInvocation.resolveMethodBinding();
-						int index = methodInvocation.arguments().indexOf(cursor);
-						type = methodInvocationBinding.getParameterTypes()[index];
+					if (cursor.getParent() instanceof VariableDeclarationFragment declFragment) {
+						type = declFragment.resolveBinding().getType();
+					} else if (cursor.getParent() instanceof MethodInvocation methodInvocation) {
+						IMethodBinding methodInvocationBinding = methodInvocation.resolveMethodBinding();
+						if (methodInvocationBinding != null) {
+							int index = methodInvocation.arguments().indexOf(cursor);
+							type = methodInvocationBinding.getParameterTypes()[index];
+						} else {
+							cursor = null;
+						}
 					} else {
 						cursor = cursor.getParent();
 					}
+				}
+				if (type == null) {
+					return null;
 				}
 
 				IMethodBinding boundMethod = type.getDeclaredMethods()[0];
@@ -567,29 +496,23 @@ public class DOMCodeSelector {
 			}
 			return methodBinding;
 		}
-		if (node instanceof MethodReference) {
-            MethodReference methodRef = (MethodReference) node;
-            return methodRef.resolveMethodBinding();
+		if (node instanceof MethodReference methodRef) {
+			return methodRef.resolveMethodBinding();
 		}
-		if (node instanceof org.eclipse.jdt.core.dom.TypeParameter) {
-            org.eclipse.jdt.core.dom.TypeParameter typeParameter = (org.eclipse.jdt.core.dom.TypeParameter) node;
-            return typeParameter.resolveBinding();
+		if (node instanceof org.eclipse.jdt.core.dom.TypeParameter typeParameter) {
+			return typeParameter.resolveBinding();
 		}
-		if (node instanceof SuperConstructorInvocation) {
-            SuperConstructorInvocation superConstructor = (SuperConstructorInvocation) node;
-            return superConstructor.resolveConstructorBinding();
+		if (node instanceof SuperConstructorInvocation superConstructor) {
+			return superConstructor.resolveConstructorBinding();
 		}
-		if (node instanceof ConstructorInvocation) {
-            ConstructorInvocation constructor = (ConstructorInvocation) node;
-            return constructor.resolveConstructorBinding();
+		if (node instanceof ConstructorInvocation constructor) {
+			return constructor.resolveConstructorBinding();
 		}
-		if (node instanceof org.eclipse.jdt.core.dom.Annotation) {
-            org.eclipse.jdt.core.dom.Annotation annotation = (org.eclipse.jdt.core.dom.Annotation) node;
-            return annotation.resolveTypeBinding();
+		if (node instanceof org.eclipse.jdt.core.dom.Annotation annotation) {
+			return annotation.resolveTypeBinding();
 		}
-		if (node instanceof SuperMethodInvocation) {
-            SuperMethodInvocation superMethod = (SuperMethodInvocation) node;
-            return superMethod.resolveMethodBinding();
+		if (node instanceof SuperMethodInvocation superMethod) {
+			return superMethod.resolveMethodBinding();
 		}
 		return null;
 	}
@@ -597,9 +520,9 @@ public class DOMCodeSelector {
 	private static ClassInstanceCreation findConstructor(ASTNode node) {
 		while (node != null && !(node instanceof ClassInstanceCreation)) {
 			ASTNode parent = node.getParent();
-			if ((parent instanceof SimpleType && ((SimpleType) parent).getName() == node) ||
-                (parent instanceof ClassInstanceCreation && ((ClassInstanceCreation) parent).getType() == node) ||
-                (parent instanceof ParameterizedType && ((ParameterizedType) parent).getType() == node)) {
+			if ((parent instanceof SimpleType type && type.getName() == node) ||
+				(parent instanceof ClassInstanceCreation constructor && constructor.getType() == node) ||
+				(parent instanceof ParameterizedType parameterized && parameterized.getType() == node)) {
 				node = parent;
 			} else {
 				node = null;
@@ -613,9 +536,8 @@ public class DOMCodeSelector {
 		while (cursor != null && (cursor instanceof Type || cursor instanceof Name)) {
 			cursor = cursor.getParent();
 		}
-		if (cursor instanceof AbstractTypeDeclaration && ((AbstractTypeDeclaration) cursor).getName() == node) {
-            AbstractTypeDeclaration typeDecl = (AbstractTypeDeclaration) cursor;
-            return typeDecl;
+		if (cursor instanceof AbstractTypeDeclaration typeDecl && typeDecl.getName() == node) {
+			return typeDecl;
 		}
 		return null;
 	}
@@ -653,6 +575,9 @@ public class DOMCodeSelector {
 	}
 
 	private IJavaElement[] findTypeInIndex(String packageName, String simpleName) throws JavaModelException {
+		if (simpleName == null) {
+			return new IJavaElement[0];
+		}
 		List<IType> indexMatch = new ArrayList<>();
 		TypeNameMatchRequestor requestor = new TypeNameMatchRequestor() {
 			@Override
@@ -698,5 +623,31 @@ public class DOMCodeSelector {
 		int end = offset + 1;
 		while (end < source.length() && Character.isJavaIdentifierPart(source.charAt(end))) end++;
 		return source.substring(start, end);
+	}
+
+	/**
+	 * Checks if the node is generated
+	 *
+	 * @param node the AST node
+	 * @return true if the node is generated.
+	 */
+	public static boolean isGenerated(ASTNode node) {
+		if (node != null) {
+			boolean[] isGenerated = {false};
+			node.accept(new ASTVisitor() {
+
+				@Override
+				public void endVisit(MarkerAnnotation markerAnnotation) {
+					if (!isGenerated[0]) {
+						// check lombok only for now
+						isGenerated[0] = "lombok.Generated".equals(markerAnnotation.getTypeName().getFullyQualifiedName()); //$NON-NLS-1$
+						super.endVisit(markerAnnotation);
+					}
+				}
+
+			});
+			return isGenerated[0];
+		}
+		return false;
 	}
 }

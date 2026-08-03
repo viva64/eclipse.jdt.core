@@ -47,6 +47,15 @@ public class RunVariousSwitchTests extends TestCase {
 				UnnamedPatternsAndVariablesTest.class,
 				JEP441SnippetsTest.class,
 				FlowAnalysisTest.class,
+				EnumTest.class,
+				LocalEnumTest.class,
+				ConstantTest.class,
+
+				NullAnnotationTests21.class,
+				NullAnnotationTest.class,
+
+				PrimitiveInPatternsTest.class,
+				PrimitiveInPatternsTestSH.class,
 
 				JavaSearchBugs14SwitchExpressionTests.class,
 				ASTRewritingSwitchExpressionsTest.class,

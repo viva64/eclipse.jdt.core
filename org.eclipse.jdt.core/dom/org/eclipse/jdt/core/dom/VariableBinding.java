@@ -333,7 +333,7 @@ class VariableBinding implements IVariableBinding {
 	@Override
 	public boolean isDeprecated() {
 		if (isField()) {
-			return ((FieldBinding) this.binding).isDeprecated();
+			return this.binding.isDeprecated();
 		}
 		return false;
 	}

@@ -187,7 +187,7 @@ public boolean exists() {
 	// so also ensure that:
 	//  - the package is not excluded (see https://bugs.eclipse.org/bugs/show_bug.cgi?id=138577)
 	//  - its name is valide (see https://bugs.eclipse.org/bugs/show_bug.cgi?id=108456)
-	return super.exists() && !Util.isExcluded(this) && isValidPackageName();
+	return isValidPackageName() && super.exists() && !Util.isExcluded(this);
 }
 /**
  * @see IPackageFragment#getOrdinaryClassFile(String)
@@ -274,11 +274,12 @@ public IClassFile[] getClassFiles() throws JavaModelException {
 
 /**
  * @see IPackageFragment#getCompilationUnit(String)
- * @exception IllegalArgumentException if the name does not end with ".java"
+ * @exception IllegalArgumentException if the name does not end with java-like or java-derived file extension
  */
 @Override
 public ICompilationUnit getCompilationUnit(String cuName) {
-	if (!org.eclipse.jdt.internal.core.util.Util.isJavaLikeFileName(cuName)) {
+	if (!org.eclipse.jdt.internal.core.util.Util.isJavaLikeFileName(cuName)
+			&& !org.eclipse.jdt.internal.core.util.Util.isJavaDerivedFileName(cuName)) {
 		throw new IllegalArgumentException(Messages.convention_unit_notJavaName);
 	}
 	return new CompilationUnit(this, cuName, DefaultWorkingCopyOwner.PRIMARY);

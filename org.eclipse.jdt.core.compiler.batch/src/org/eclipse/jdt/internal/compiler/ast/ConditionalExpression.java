@@ -290,7 +290,6 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext,
 
 		// Generate code for the condition
 		falseLabel = new BranchLabel(codeStream);
-		falseLabel.tagBits |= BranchLabel.USED;
 		this.condition.generateOptimizedBoolean(
 			currentScope,
 			codeStream,
@@ -329,14 +328,8 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext,
 				// End of if statement
 				endifLabel.place();
 			}
-			if (valueRequired) {
-				if (this.valueIfFalse.resolvedType == TypeBinding.NULL) {
-					if (!this.resolvedType.isBaseType()) {
-						codeStream.operandStack.pop(TypeBinding.NULL);
-						codeStream.operandStack.push(this.resolvedType);
-					}
-				}
-			}
+			if (valueRequired && codeStream.operandStack.peek() == TypeBinding.NULL)
+				codeStream.operandStack.cast(this.resolvedType);
 		}
 		// May loose some local variable initializations : affecting the local variable attributes
 		if (this.mergedInitStateIndex != -1) {
@@ -518,9 +511,9 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext,
 				return null;
 		} else {
 			if (this.originalValueIfTrueType.kind() == Binding.POLY_TYPE)
-				this.originalValueIfTrueType = this.valueIfTrue.resolveType(scope);
+				this.originalValueIfTrueType = this.valueIfTrue.resolveTypeWithBindings(this.condition.bindingsWhenTrue(), scope);
 			if (this.originalValueIfFalseType.kind() == Binding.POLY_TYPE)
-				this.originalValueIfFalseType = this.valueIfFalse.resolveType(scope);
+				this.originalValueIfFalseType = this.valueIfFalse.resolveTypeWithBindings(this.condition.bindingsWhenFalse(), scope);
 
 			if (this.originalValueIfTrueType == null || !this.originalValueIfTrueType.isValidBinding())
 				return this.resolvedType = null;
@@ -796,11 +789,11 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext,
 		if (this.expressionContext != ASSIGNMENT_CONTEXT && this.expressionContext != INVOCATION_CONTEXT)
 			return false;
 
-		if (this.originalValueIfTrueType == null || this.originalValueIfFalseType == null) // resolution error.
-			return false;
-
 		if (this.valueIfTrue.isPolyExpression() || this.valueIfFalse.isPolyExpression())
 			return true;
+
+		if (this.originalValueIfTrueType == null || this.originalValueIfFalseType == null) // resolution error.
+			return false;
 
 		// "... unless both operands produce primitives (or boxed primitives)":
 		if (this.originalValueIfTrueType.isBaseType() || (this.originalValueIfTrueType.id >= TypeIds.T_JavaLangByte && this.originalValueIfTrueType.id <= TypeIds.T_JavaLangBoolean)) {
@@ -814,8 +807,27 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext,
 
 	@Override
 	public boolean isCompatibleWith(TypeBinding left, Scope scope) {
-		return isPolyExpression() ? this.valueIfTrue.isCompatibleWith(left, scope) && this.valueIfFalse.isCompatibleWith(left, scope) :
-			super.isCompatibleWith(left, scope);
+		if (!isPolyExpression())
+			return super.isCompatibleWith(left, scope);
+
+		scope.include(this.condition.bindingsWhenTrue());
+		try {
+			if (!this.valueIfTrue.isCompatibleWith(left, scope))
+				return false;
+		} finally {
+			scope.exclude(this.condition.bindingsWhenTrue());
+		}
+
+		scope.include(this.condition.bindingsWhenFalse());
+		try {
+			if (!this.valueIfFalse.isCompatibleWith(left, scope))
+				return false;
+		} finally {
+			scope.exclude(this.condition.bindingsWhenFalse());
+		}
+
+		return true;
+
 	}
 
 	@Override

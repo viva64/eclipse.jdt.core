@@ -25,46 +25,78 @@ import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
  */
 interface IGenerateTypeCheck {
 
-	default void generateTypeCheck(TypeBinding providedType, TypeReference expectedTypeRef, BlockScope scope, CodeStream codeStream, BranchLabel falseLabel, PrimitiveConversionRoute route) {
+	default void generateTypeCheck(TypeBinding providedType, TypeReference expectedTypeRef, BlockScope scope, CodeStream codeStream, PrimitiveConversionRoute route) {
 		switch (route) {
-			case IDENTITY_CONVERSION:
+			case IDENTITY_CONVERSION -> {
 				consumeProvidedValue(providedType, codeStream);
 				codeStream.iconst_1();
 				setPatternIsTotalType();
-				break;
-			case WIDENING_PRIMITIVE_CONVERSION:
-			case NARROWING_PRIMITVE_CONVERSION:
-			case WIDENING_AND_NARROWING_PRIMITIVE_CONVERSION:
+			}
+			case WIDENING_PRIMITIVE_CONVERSION,
+			NARROWING_PRIMITVE_CONVERSION,
+			WIDENING_AND_NARROWING_PRIMITIVE_CONVERSION -> {
 				generateExactConversions(providedType, expectedTypeRef.resolvedType, scope, codeStream);
 				setPatternIsTotalType();
-				break;
-			case BOXING_CONVERSION:
-			case BOXING_CONVERSION_AND_WIDENING_REFERENCE_CONVERSION:
+			}
+			case BOXING_CONVERSION,
+			BOXING_CONVERSION_AND_WIDENING_REFERENCE_CONVERSION -> {
 				consumeProvidedValue(providedType, codeStream);
 				codeStream.iconst_1();
 				setPatternIsTotalType();
-				break;
-			case WIDENING_REFERENCE_AND_UNBOXING_COVERSION:
-			case WIDENING_REFERENCE_AND_UNBOXING_COVERSION_AND_WIDENING_PRIMITIVE_CONVERSION:
-				codeStream.ifnull(falseLabel);
-				codeStream.iconst_1();
+			}
+			case WIDENING_REFERENCE_AND_UNBOXING_COVERSION,
+			WIDENING_REFERENCE_AND_UNBOXING_COVERSION_AND_WIDENING_PRIMITIVE_CONVERSION -> {
+				codeStream.instance_of(scope.getJavaLangObject());
 				setPatternIsTotalType();
-				break;
-			case NARROWING_AND_UNBOXING_CONVERSION:
+			}
+			case NARROWING_AND_UNBOXING_CONVERSION -> {
 				TypeBinding boxType = scope.environment().computeBoxingType(expectedTypeRef.resolvedType);
 				codeStream.instance_of(expectedTypeRef, boxType);
-				break;
-			case UNBOXING_CONVERSION:
-			case UNBOXING_AND_WIDENING_PRIMITIVE_CONVERSION:
-				codeStream.ifnull(falseLabel);
-				codeStream.iconst_1();
+			}
+			case UNBOXING_CONVERSION -> {
+				codeStream.instance_of(scope.getJavaLangObject());
 				setPatternIsTotalType();
+			}
+			case UNBOXING_AND_WIDENING_PRIMITIVE_CONVERSION -> {
+				codeStream.dup();
+				codeStream.instance_of(providedType);
+				BranchLabel iLabel = new BranchLabel(codeStream);
+				BranchLabel postCheck = new BranchLabel(codeStream);
+
+				codeStream.ifne(iLabel);
+				codeStream.pop();
+				codeStream.iconst_0();
+				codeStream.goto_(postCheck);
+
+				iLabel.place();
+				codeStream.checkcast(providedType);
+				TypeBinding unboxedType = scope.environment().computeBoxingType(providedType);
+				codeStream.generateUnboxingConversion(unboxedType.id);
+				int expectedTypeId = expectedTypeRef.resolvedType.id;
+				int unboxedProvidedTypeId = unboxedType.id;
+				if (BaseTypeBinding.isExactWidening(expectedTypeId, unboxedProvidedTypeId)) {
+					codeStream.pop();
+					codeStream.iconst_1();
+				} else {
+					codeStream.invokeExactConversionsSupport(BaseTypeBinding.getRightToLeft(expectedTypeId, unboxedProvidedTypeId));
+				}
+
+				codeStream.goto_(postCheck);
+				postCheck.place();
+				setPatternIsTotalType();
+			}
+			case NO_CONVERSION_ROUTE -> {
+				if (isUnnamed() && expectedTypeRef == null) { // for a type elided unnamed pattern, there is no need for a type check.
+					consumeProvidedValue(providedType, codeStream);
+					codeStream.iconst_1();
+				} else {
+					codeStream.instance_of(expectedTypeRef, expectedTypeRef.resolvedType);
+				}
 				break;
-			case NO_CONVERSION_ROUTE:
-				codeStream.instance_of(expectedTypeRef, expectedTypeRef.resolvedType);
-				break;
-			default:
+			}
+			default -> {
 				throw new IllegalArgumentException("Unexpected conversion route "+route); //$NON-NLS-1$
+			}
 		}
 	}
 
@@ -74,6 +106,11 @@ interface IGenerateTypeCheck {
 	}
 
 	void setPatternIsTotalType();
+
+	/* Overridden in Pattern */
+	default boolean isUnnamed() {
+		return false;
+	}
 
 	default void generateExactConversions(TypeBinding provided, TypeBinding expected, BlockScope scope, CodeStream codeStream) {
 		if (BaseTypeBinding.isExactWidening(expected.id, provided.id)) {

@@ -68,19 +68,14 @@ public class EitherOrMultiPattern extends Pattern {
 			TypeBinding t = this.patterns[i].resolveType(scope);
 			if (t == null || !t.isValidBinding())
 				hasError = true;
+			for (int j = 0; j < i; j++) {
+				if (this.patterns[j].dominates(this.patterns[i], scope)) {
+					scope.problemReporter().patternDominatedByAnother(this.patterns[i]);
+					break;
+				}
+			}
 		}
 		return this.resolvedType = hasError ? null : this.patterns[0].resolvedType; // for now, we don't have a union type abstraction
-	}
-
-	@Override
-	public boolean matchFailurePossible() {
-		if (!isUnguarded())
-			return true;
-		for (Pattern p : this.patterns) {
-			if (p.matchFailurePossible())
-				return true;
-		}
-		return false;
 	}
 
 	@Override
@@ -106,11 +101,11 @@ public class EitherOrMultiPattern extends Pattern {
 	}
 
 	@Override
-	public boolean dominates(Pattern p) {
+	public boolean dominates(Pattern p, Scope scope) {
 		if (!isUnguarded())
 			return false;
 		for (Pattern thiz : this.patterns) {
-			if (thiz.dominates(p))
+			if (thiz.dominates(p, scope))
 				return true;
 		}
 		return false;

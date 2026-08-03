@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2024 IBM Corporation and others.
+ * Copyright (c) 2000, 2025 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -23,6 +23,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
@@ -93,6 +94,9 @@ public abstract class AbstractJavaModelTests extends SuiteOfTestCases {
 	protected static boolean isJRE21 = false;
 	protected static boolean isJRE22 = false;
 	protected static boolean isJRE23 = false;
+	protected static boolean isJRE24 = false;
+	protected static boolean isJRE25 = false;
+	protected static boolean isJRE26 = false;
 	static {
 		String javaVersion = System.getProperty("java.version");
 		String vmName = System.getProperty("java.vm.name");
@@ -105,6 +109,15 @@ public abstract class AbstractJavaModelTests extends SuiteOfTestCases {
 			}
 		}
 		long jdkLevel = CompilerOptions.versionToJdkLevel(javaVersion.length() > 3 ? javaVersion.substring(0, 3) : javaVersion);
+		if (jdkLevel >= ClassFileConstants.JDK26) {
+			isJRE26 = true;
+		}
+		if (jdkLevel >= ClassFileConstants.JDK25) {
+			isJRE25 = true;
+		}
+		if (jdkLevel >= ClassFileConstants.JDK24) {
+			isJRE24 = true;
+		}
 		if (jdkLevel >= ClassFileConstants.JDK23) {
 			isJRE23 = true;
 		}
@@ -233,9 +246,21 @@ public abstract class AbstractJavaModelTests extends SuiteOfTestCases {
 	 */
 	protected static final int AST_INTERNAL_JLS22 = AST.JLS22;
 	/**
-	 * Internal synonym for constant AST.JSL22
+	 * Internal synonym for constant AST.JSL23
 	 */
 	protected static final int AST_INTERNAL_JLS23 = AST.JLS23;
+	/**
+	 * Internal synonym for constant AST.JSL24
+	 */
+	protected static final int AST_INTERNAL_JLS24 = AST.JLS24;
+	/**
+	 * Internal synonym for constant AST.JSL25
+	 */
+	protected static final int AST_INTERNAL_JLS25 = AST.JLS25;
+	/**
+	 * Internal synonym for constant AST.JSL26
+	 */
+	protected static final int AST_INTERNAL_JLS26 = AST.JLS26;
 	/**
 	 * Internal synonym for the latest AST level.
 	 */
@@ -479,13 +504,13 @@ public abstract class AbstractJavaModelTests extends SuiteOfTestCases {
 		}
 
 		public void waitForResourceDelta() {
-			long start = System.currentTimeMillis();
+			long startNanos = System.nanoTime();
 			while (!this.gotResourceDelta) {
 				try {
-					Thread.sleep(50);
+					Thread.sleep(1);
 				} catch (InterruptedException e) {
 				}
-				if ((System.currentTimeMillis() - start) > 10000/*wait 10 s max*/) {
+				if ((System.nanoTime() - startNanos) / 1_0000_000 > 10000/* wait 10 s max */) {
 					throw new RuntimeException("Didn't get resource delta after 10 seconds");
 				}
 			}
@@ -1691,6 +1716,9 @@ public abstract class AbstractJavaModelTests extends SuiteOfTestCases {
 	protected IJavaProject createJava21Project(String name) throws CoreException {
 		return createJava9ProjectWithJREAttributes(name, new String[]{"src"}, null, "21");
 	}
+	protected IJavaProject createJava23Project(String name) throws CoreException {
+		return createJava9ProjectWithJREAttributes(name, new String[]{"src"}, null, "23");
+	}
 	protected IJavaProject createJava9ProjectWithJREAttributes(String name, String[] srcFolders, IClasspathAttribute[] attributes) throws CoreException {
 		return createJava9ProjectWithJREAttributes(name, srcFolders, attributes, "9");
 	}
@@ -2031,7 +2059,7 @@ public abstract class AbstractJavaModelTests extends SuiteOfTestCases {
 				if (locationURI != null)
 					createExternalProject(projectName, locationURI);
 				else
-					createProject(projectName);
+					createProjectInWorkspaceRunnnable(projectName);
 
 				// set java nature
 				addJavaNature(projectName);
@@ -2305,6 +2333,24 @@ public abstract class AbstractJavaModelTests extends SuiteOfTestCases {
 					options.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_22);
 					options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_22);
 					javaProject.setOptions(options);
+				} else if ("23".equals(compliance)) {
+					Map options = new HashMap();
+					options.put(CompilerOptions.OPTION_Compliance, CompilerOptions.VERSION_23);
+					options.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_23);
+					options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_23);
+					javaProject.setOptions(options);
+				} else if ("24".equals(compliance)) {
+					Map options = new HashMap();
+					options.put(CompilerOptions.OPTION_Compliance, CompilerOptions.VERSION_24);
+					options.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_24);
+					options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_24);
+					javaProject.setOptions(options);
+				} else if ("25".equals(compliance)) {
+					Map options = new HashMap();
+					options.put(CompilerOptions.OPTION_Compliance, CompilerOptions.VERSION_25);
+					options.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_25);
+					options.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_25);
+					javaProject.setOptions(options);
 				} else {
 					// Do NOT set default project options if compliance is not given,
 					// we may test workspace (JavaCore) default options here
@@ -2323,21 +2369,21 @@ public abstract class AbstractJavaModelTests extends SuiteOfTestCases {
 		IProject sameProject = getWorkspaceRoot().getProject(projectName);
 		assertEquals("Returned project doesn't match same project from workspace: " + sameProject + " vs " + project, sameProject, project);
 
-		List<IJavaProject> javaProjects = List.of(getJavaModel().getJavaProjects());
-		boolean foundInModel = javaProjects.stream().anyMatch(p -> projectName.equals(p.getElementName()));
-		if (!foundInModel) {
-			try {
-				Thread.sleep(100);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
-			waitForAutoBuild();
-			waitForManualRefresh();
-			javaProjects = List.of(getJavaModel().getJavaProjects());
-			foundInModel = javaProjects.stream().anyMatch(p -> projectName.equals(p.getElementName()));
-		}
 		boolean isNestedWorkspaceCall = isWorkspaceRuleAlreadyInUse(getWorkspaceRoot());
 		if (!isNestedWorkspaceCall) {
+			List<IJavaProject> javaProjects = List.of(getJavaModel().getJavaProjects());
+			boolean foundInModel = javaProjects.stream().anyMatch(p -> projectName.equals(p.getElementName()));
+			if (!foundInModel) {
+				try {
+					Thread.sleep(100);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+				waitForAutoBuild();
+				waitForManualRefresh();
+				javaProjects = List.of(getJavaModel().getJavaProjects());
+				foundInModel = javaProjects.stream().anyMatch(p -> projectName.equals(p.getElementName()));
+			}
 			assertTrue("Project '" + projectName + "' should be present in JavaModel, but we found only: " + javaProjects, foundInModel);
 		} else {
 			// No assert here, caller has to check it *after* the workspace task
@@ -2377,19 +2423,17 @@ public abstract class AbstractJavaModelTests extends SuiteOfTestCases {
 	/*
 	 * Create simple project.
 	 */
-	protected IProject createProject(final String projectName) throws CoreException {
+	protected void createProjectInWorkspaceRunnnable(String projectName) throws CoreException {
+		assertTrue(isWorkspaceRuleAlreadyInUse(getWorkspaceRoot()));
 		final IProject project = getProject(projectName);
-		IWorkspaceRunnable create = new IWorkspaceRunnable() {
-			public void run(IProgressMonitor monitor) throws CoreException {
-				project.create(null);
-				project.open(null);
-			}
-		};
-		if(isWorkspaceRuleAlreadyInUse(getWorkspaceRoot())) {
-			create.run(null);
-		} else {
-			getWorkspace().run(create, null);
-		}
+		project.create(null);
+		project.open(null);
+	}
+
+	protected IProject createProject(String projectName) throws CoreException {
+		assertFalse(isWorkspaceRuleAlreadyInUse(getWorkspaceRoot()));
+		final IProject project = getProject(projectName);
+		getWorkspace().run(m -> createProjectInWorkspaceRunnnable(projectName), null);
 		List<IJavaProject> javaProjects = List.of(getJavaModel().getJavaProjects());
 		boolean foundInModel = javaProjects.stream().anyMatch(p -> projectName.equals(p.getElementName()));
 		if (!foundInModel) {
@@ -2428,6 +2472,7 @@ public abstract class AbstractJavaModelTests extends SuiteOfTestCases {
 			project.open(null);
 		}
 		deleteResource(project);
+		waitForSnapShot();
 	}
 	protected void deleteProject(IJavaProject project) throws CoreException {
 		if (project.exists() && !project.isOpen()) { // force opening so that project can be deleted without logging (see bug 23629)
@@ -2535,7 +2580,11 @@ public abstract class AbstractJavaModelTests extends SuiteOfTestCases {
 	protected String[] getJCLLibrary(String compliance) throws JavaModelException, IOException {
 		// ensure that the requested JCL lib is setup (i.e. that the jclMinXY.jar is copied)
 		setUpJCLClasspathVariables(compliance);
-		return new String[] {getExternalJCLPathString(compliance)};
+		String externalJCLPathString = getExternalJCLPathString(compliance);
+		if (externalJCLPathString == null) {
+			return new String[] {};
+		}
+		return new String[] {externalJCLPathString};
 	}
 	/**
 	 * Returns the specified compilation unit in the given project, root, and
@@ -2669,17 +2718,13 @@ public abstract class AbstractJavaModelTests extends SuiteOfTestCases {
 	 */
 	protected String getExternalPath() {
 		if (EXTERNAL_JAR_DIR_PATH == null) {
-			try {
-				String path = getWorkspaceRoot().getLocation().toFile().getParentFile().getCanonicalPath();
-				if (path.charAt(path.length()-1) != File.separatorChar) {
-					path += File.separatorChar;
-				}
-				EXTERNAL_JAR_DIR_PATH = path;
-				System.out.println("EXTERNAL_JAR_DIR_PATH=" + EXTERNAL_JAR_DIR_PATH);
-				System.out.println("EXTERNAL_JAR_DIR_PATH writable? " + Files.isWritable(Paths.get(EXTERNAL_JAR_DIR_PATH)));
-			} catch (IOException e) {
-				throw new IllegalStateException(e);
+			String path = getWorkspaceRoot().getLocation().toFile().getParentFile().toPath().normalize().toAbsolutePath().toString();
+			if (path.charAt(path.length()-1) != File.separatorChar) {
+				path += File.separatorChar;
 			}
+			EXTERNAL_JAR_DIR_PATH = path;
+			System.out.println("EXTERNAL_JAR_DIR_PATH=" + EXTERNAL_JAR_DIR_PATH);
+			System.out.println("EXTERNAL_JAR_DIR_PATH writable? " + Files.isWritable(Paths.get(EXTERNAL_JAR_DIR_PATH)));
 		}
 		return EXTERNAL_JAR_DIR_PATH;
 	}
@@ -2688,15 +2733,12 @@ public abstract class AbstractJavaModelTests extends SuiteOfTestCases {
 	 * This path ends with a File.separatorChar.
 	 */
 	protected String getWorkspacePath() {
-		if (WORKSPACE_DIR_PATH == null)
-			try {
-				String path = getWorkspaceRoot().getLocation().toFile().getCanonicalPath();
-				if (path.charAt(path.length()-1) != File.separatorChar)
-					path += File.separatorChar;
-				WORKSPACE_DIR_PATH = path;
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
+		if (WORKSPACE_DIR_PATH == null) {
+			String path = getWorkspaceRoot().getLocation().toFile().toPath().normalize().toAbsolutePath().toString();
+			if (path.charAt(path.length()-1) != File.separatorChar)
+				path += File.separatorChar;
+			WORKSPACE_DIR_PATH = path;
+		}
 		return WORKSPACE_DIR_PATH;
 	}
 	protected IFile getFile(String path) {
@@ -3410,7 +3452,7 @@ public abstract class AbstractJavaModelTests extends SuiteOfTestCases {
 	protected IJavaProject setUpJavaProject(final String projectName, String compliance, boolean useFullJCL) throws CoreException, IOException {
 		// copy files in project from source workspace to target workspace
 		String sourceWorkspacePath = getSourceWorkspacePath();
-		String targetWorkspacePath = getWorkspaceRoot().getLocation().toFile().getCanonicalPath();
+		String targetWorkspacePath = getWorkspaceRoot().getLocation().toFile().toPath().normalize().toAbsolutePath().toString();
 		copyDirectory(new File(sourceWorkspacePath, projectName), new File(targetWorkspacePath, projectName));
 
 		// ensure variables are set
@@ -3457,7 +3499,16 @@ public abstract class AbstractJavaModelTests extends SuiteOfTestCases {
 				newJclSrcString = "JCL18_FULL_SRC";
 			}
 		} else {
-			if (compliance.equals("23")) {
+			if (compliance.equals("26")) {
+				newJclLibString = "JCL_26_LIB";
+				newJclSrcString = "JCL_26_SRC";
+			} else if (compliance.equals("25")) {
+				newJclLibString = "JCL_25_LIB";
+				newJclSrcString = "JCL_25_SRC";
+			} else if (compliance.equals("24")) {
+				newJclLibString = "JCL_24_LIB";
+				newJclSrcString = "JCL_24_SRC";
+			} else if (compliance.equals("23")) {
 				newJclLibString = "JCL_23_LIB";
 				newJclSrcString = "JCL_23_SRC";
 			} else if (compliance.equals("22")) {
@@ -3661,6 +3712,30 @@ public abstract class AbstractJavaModelTests extends SuiteOfTestCases {
 					new IPath[] {getExternalJCLPath("23"), getExternalJCLSourcePath("23"), getExternalJCLRootSourcePath()},
 					null);
 			}
+		} else if ("24".equals(compliance)) {
+			if (JavaCore.getClasspathVariable("JCL_24_LIB") == null) {
+				setupExternalJCL("jclMin24");
+				JavaCore.setClasspathVariables(
+					new String[] {"JCL_24_LIB", "JCL_24_SRC", "JCL_SRCROOT"},
+					new IPath[] {getExternalJCLPath("24"), getExternalJCLSourcePath("24"), getExternalJCLRootSourcePath()},
+					null);
+			}
+		} else if ("25".equals(compliance)) {
+			if (JavaCore.getClasspathVariable("JCL_25_LIB") == null) {
+				setupExternalJCL("jclMin25");
+				JavaCore.setClasspathVariables(
+					new String[] {"JCL_25_LIB", "JCL_25_SRC", "JCL_SRCROOT"},
+					new IPath[] {getExternalJCLPath("25"), getExternalJCLSourcePath("25"), getExternalJCLRootSourcePath()},
+					null);
+			}
+		} else if ("26".equals(compliance)) {
+			if (JavaCore.getClasspathVariable("JCL_26_LIB") == null) {
+				setupExternalJCL("jclMin26");
+				JavaCore.setClasspathVariables(
+					new String[] {"JCL_26_LIB", "JCL_26_SRC", "JCL_SRCROOT"},
+					new IPath[] {getExternalJCLPath("26"), getExternalJCLSourcePath("26"), getExternalJCLRootSourcePath()},
+					null);
+			}
 		} else {
 			if (JavaCore.getClasspathVariable("JCL18_LIB") == null) {
 				setupExternalJCL("jclMin" + CompilerOptions.getFirstSupportedJavaVersion());
@@ -3733,7 +3808,7 @@ public abstract class AbstractJavaModelTests extends SuiteOfTestCases {
 			System.out.println("--------------------------------------------------------------------------------");
 			System.out.println("Running test "+getName()+"...");
 		}
-		logInfo("SETUP " + getName());
+		logInfo("SETUP " + getClass().getSimpleName() + "." + getName());
 	}
 
     private static void printSystemEnv() {
@@ -3752,6 +3827,7 @@ public abstract class AbstractJavaModelTests extends SuiteOfTestCases {
         System.out.println(env);
     }
 
+	@SuppressWarnings("removal")
     private void printMemoryUse() {
     	System.gc();
     	System.runFinalization();
@@ -3951,7 +4027,7 @@ public abstract class AbstractJavaModelTests extends SuiteOfTestCases {
 	}
 	@Override
 	protected void tearDown() throws Exception {
-		logInfo("TEARDOWN " + getName());
+		logInfo("TDOWN " + getClass().getSimpleName() + "." + getName());
 		if (this.workingCopies != null) {
 			discardWorkingCopies(this.workingCopies);
 			this.workingCopies = null;
@@ -4052,6 +4128,15 @@ public abstract class AbstractJavaModelTests extends SuiteOfTestCases {
 		} while (wasInterrupted);
 	}
 
+	public static void waitForAutoRefresh() throws CoreException {
+		try {
+			Job.getJobManager().wakeUp(ResourcesPlugin.FAMILY_AUTO_REFRESH);
+			Job.getJobManager().join(ResourcesPlugin.FAMILY_AUTO_REFRESH, null);
+		} catch (OperationCanceledException | InterruptedException e) {
+			throw new CoreException(Status.error("Waiting on auto-refresh interrupted", e));
+		}
+	}
+
 	public static boolean isTouchJobRunning() {
 		Job[] jobs = Job.getJobManager().find(JavaModelManager.class);
 		for (Job job : jobs) {
@@ -4130,23 +4215,54 @@ public abstract class AbstractJavaModelTests extends SuiteOfTestCases {
 		javaProject.setRawClasspath(classpath, null);
 	}
 
-	private static void logError(String errorMessage, CoreException e) {
-		Plugin plugin = JavaCore.getPlugin();
-		if (plugin != null) {
-			ILog log = plugin.getLog();
-			Status status = new Status(IStatus.ERROR, JavaCore.PLUGIN_ID, errorMessage, e);
-			log.log(status);
-		} else {
-			System.out.println(errorMessage);
-			e.printStackTrace(System.out);
+	protected static void logDeltaEvent(IResourceChangeEvent event) {
+		StringBuilder s = new StringBuilder();
+		s.append("Logging resource change event");
+		s.append(System.lineSeparator());
+		s.append("thread: ");
+		s.append(Thread.currentThread().getName());
+		s.append(System.lineSeparator());
+		s.append("type: ");
+		s.append(event.getType());
+		s.append(System.lineSeparator());
+		s.append("buildKind: ");
+		s.append(event.getBuildKind());
+		s.append(System.lineSeparator());
+		s.append("resource: ");
+		s.append(event.getResource());
+		s.append(System.lineSeparator());
+		s.append("source: " );
+		s.append(event.getSource());
+		IResourceDelta delta = event.getDelta();
+		if (delta != null) {
+			s.append(System.lineSeparator());
+			s.append("Delta:");
+			IResourceDeltaVisitor visitor = new IResourceDeltaVisitor() {
+				@Override
+				public boolean visit(IResourceDelta d) throws CoreException {
+					s.append(System.lineSeparator());
+					s.append("\tkind: ");
+					s.append(d.getKind());
+					s.append(", resource: ");
+					s.append(d.getResource());
+					return true;
+				}
+			};
+			try {
+				delta.accept(visitor);
+			} catch (CoreException e) {
+				logError("Error occurred while visiting delta", e);
+			}
+			logInfo(s.toString());
 		}
 	}
 
-	private static void logInfo(String message) {
-		Plugin plugin = JavaCore.getPlugin();
-		if (plugin != null) {
-			plugin.getLog().log(new Status(IStatus.INFO, JavaCore.PLUGIN_ID, message));
-		}
-		System.out.println(message);
+	protected static void logError(String errorMessage, CoreException e) {
+		logInfo(errorMessage);
+		e.printStackTrace(System.out);
+	}
+
+	protected static void logInfo(String message) {
+		System.out.println(new SimpleDateFormat("HH:mm:ss.SSS").format(new Date()) + " " + message);
 	}
 }

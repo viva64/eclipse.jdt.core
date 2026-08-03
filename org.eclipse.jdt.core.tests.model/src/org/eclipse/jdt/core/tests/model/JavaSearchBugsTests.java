@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2021 IBM Corporation and others.
+ * Copyright (c) 2000, 2024 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -68,6 +68,7 @@ import org.eclipse.jdt.internal.core.search.matching.MethodPattern;
 import org.eclipse.jdt.internal.core.search.matching.PatternLocator;
 import org.eclipse.jdt.internal.core.search.matching.TypeDeclarationPattern;
 import org.eclipse.jdt.internal.core.search.matching.TypeReferencePattern;
+import org.eclipse.jdt.internal.core.search.processing.JobManager;
 
 /**
  * Non-regression tests for bugs fixed in Java Search engine.
@@ -81,6 +82,8 @@ static {
 //	 org.eclipse.jdt.internal.core.search.BasicSearchEngine.VERBOSE = true;
 //	TESTS_NAMES = new String[] {"testBug324189d"};
 }
+
+private boolean wasVerbose;
 
 public JavaSearchBugsTests(String name) {
 	super(name);
@@ -186,9 +189,16 @@ public void tearDownSuite() throws Exception {
 }
 @Override
 protected void setUp () throws Exception {
+	this.wasVerbose = JobManager.VERBOSE;
+	JobManager.VERBOSE = true;
 	super.setUp();
 	this.resultCollector = new TestCollector();
 	this.resultCollector.showAccuracy(true);
+}
+@Override
+protected void tearDown() throws Exception {
+	super.tearDown();
+	JobManager.VERBOSE = this.wasVerbose;
 }
 
 /**
@@ -5942,6 +5952,7 @@ public void testBug110291() throws CoreException {
 	);
 	search("Test110291", CONSTRUCTOR, DECLARATIONS, SearchPattern.R_PREFIX_MATCH);
 	assertSearchResults(
+		"src/b110291/Test110291XX.java b110291.Test110291XX [Test110291XX] EXACT_MATCH\n" +
 		"src/b110291/Test110291XX.java b110291.Test110291XX$Test110291YY [Test110291YY] EXACT_MATCH"
 	);
 }
@@ -10737,11 +10748,14 @@ public void testBug261722() throws Exception {
 		    }
 		};
 		Thread thread = new Thread(search);
+		long start = System.nanoTime();
+		long maxEnd = start + 10_000_000_000L;
+
 		thread.start();
 
 		// Delete project in current thread after being sure that the search
 		// request was started
-		while (requestor.count < (MAX/3)) {
+		while (requestor.count < (MAX/3) && System.nanoTime() < maxEnd) {
 			Thread.sleep(10);
 		}
 		deleteProject(javaProject);
@@ -15155,6 +15169,88 @@ public void testBug521240_001() throws CoreException {
 			"src/pack1/X.java void pack1.X.foo(Y) [foo] EXACT_MATCH"
 	);
 }
+
+/*
+ * See problem report https://github.com/eclipse-jdt/eclipse.jdt.core/issues/2575
+ * See also analysis in https://github.com/eclipse-jdt/eclipse.jdt.core/pull/4341
+ */
+public void testGH2575() throws CoreException, IOException {
+	String testProjectName = "BugGH4341";
+	try {
+		IJavaProject project = createJava9Project(testProjectName, new String[] {"src"});
+
+		setUpProjectCompliance(project, "9", true);
+
+		 // Create a hierarchy of interfaces (D -> A -> B -> C) and an imports relation (C -> D).
+
+		String packageX = "/" + testProjectName + "/src/x";
+		createFolder(packageX);
+		createFile(packageX + "/A.java",
+				"""
+				package x;
+				public interface A extends B {}
+				""");
+
+		createFile(packageX + "/B.java",
+				"""
+				package x;
+				public interface B extends C {}
+				""");
+
+		createFile(packageX + "/C.java",
+				"""
+				package x;
+				import javax.annotation.processing.SupportedSourceVersion;
+				import javax.lang.model.SourceVersion;
+				import y.D;
+				/**
+				 * {@link D}
+				 */
+				@SupportedSourceVersion(SourceVersion.RELEASE_0)
+				public interface C {}
+				""");
+
+
+		String packageY = "/" + testProjectName + "/src/y";
+		createFolder(packageY);
+		createFile(packageY + "/D.java",
+				"""
+				package y;
+				import x.A;
+				public interface D extends A {}
+				""");
+
+
+		String packageZ = "/" + testProjectName + "/src/z";
+		createFolder(packageZ);
+		createFile(packageZ + "/Main.java",
+				"""
+				package z;
+				import x.A;
+				import y.D;
+
+				public class Main {
+					public void method1() {
+						D d = new D() {};
+						method2(d);
+					}
+
+					public void method2(A a) {}
+				}
+				""");
+
+
+		buildAndExpectNoProblems(project);
+
+		IType type = project.findType("z.Main");
+		IMethod method = type.getMethod("method2", new String[] { "QA;" });
+		search(method, REFERENCES, EXACT_RULE, SearchEngine.createWorkspaceScope(), this.resultCollector);
+		assertSearchResults("src/z/Main.java void z.Main.method1() [method2(d)] EXACT_MATCH");
+	} finally {
+		deleteProject(testProjectName);
+	}
+}
+
 public void testBug547051_nonModular() throws Exception {
 	try {
 		IJavaProject project = createJavaProject("P");
@@ -15256,13 +15352,13 @@ public void testBug547095_type_pattern_search_non_modular() throws Exception {
 	}
 }
 
-public void _2551_testBug573486_showReferences_inMethodsAndFields_whenNoSource() throws CoreException, IOException {
+public void testBug573486_showReferences_inMethodsAndFields_whenNoSource() throws CoreException, IOException {
 	addLibraryEntry(JAVA_PROJECT, "/JavaSearchBugs/lib/search_lib_no_source.jar", false);
 	try {
 		IType type = getClassFile("JavaSearchBugs", "lib/search_lib_no_source.jar", "java.util", "Observable.class").getType();
 		search(type, REFERENCES);
 		assertSearchResults(
-			"lib/search_lib_no_source.jar java.util.List<java.util.Observable> search.ReferenceSubject.methodRef() [No source] POTENTIAL_MATCH\n"
+			"lib/search_lib_no_source.jar java.util.ArrayList<java.util.Observable> search.ReferenceSubject.methodRef() [No source] POTENTIAL_MATCH\n"
 			+ "lib/search_lib_no_source.jar void search.ReferenceSubject.methodRefParam1(java.util.Observable) [No source] POTENTIAL_MATCH\n"
 			+ "lib/search_lib_no_source.jar void search.ReferenceSubject.methodRefParam2(java.util.Observable, java.util.Observable) [No source] POTENTIAL_MATCH\n"
 			+ "lib/search_lib_no_source.jar T search.ReferenceSubject.methodRefTP() [No source] POTENTIAL_MATCH\n"
@@ -15308,7 +15404,7 @@ public void testClasspathFilterUnnamedModuleBugGh485() throws Exception {
 		ICompilationUnit[] cus = { type.getCompilationUnit() };
 
 		boolean excludeTests = false;
-		SearchableEnvironment search = new SearchableEnvironment(project1, cus, excludeTests);
+		SearchableEnvironment search = new SearchableEnvironment(project1, cus, excludeTests, JavaProject.NO_RELEASE);
 
 		char[][] packageName = { new char[] { 'c', 'o', 'm' } };
 		char[][] modules = search.getModulesDeclaringPackage(packageName, ModuleBinding.UNNAMED);
@@ -15497,6 +15593,100 @@ public void testModuleConflictGh723() throws Exception {
 		deleteProject(projectName);
 		deleteProject(modularProjectName);
 	}
+}
+
+/**
+ * issue 3308: SearchEngine.searchDeclarationsOfSentMessages() does not support local or anonymous classes
+ * @see "https://github.com/eclipse-jdt/eclipse.jdt.core/issues/3308"
+ */
+public void testIssue3308() throws CoreException {
+	this.workingCopies = new ICompilationUnit[1];
+	String src= """
+			package issue3308;
+			public class Test {
+				public class BaseTargetClass {
+				}
+
+				public class OriginalClass {
+					public int data = 60;
+
+					public void memberMethod() {
+					}
+
+					public class NestedOriginalClass extends BaseTargetClass {
+						void setup() {
+							new BaseTargetClass() {
+								int j = 1;
+
+								void methodToBePulledUp() {
+									j = 2;
+									methodHelper();
+								}
+
+								void methodHelper() {
+									System.out.println("Helper Method in Anonymous Class: " + data);
+								}
+							};
+						}
+					}
+				}
+			}
+			""";
+
+	this.workingCopies[0] = getWorkingCopy("/JavaSearchBugs/src/issue3308/Test.java", src);
+	IType type = (IType) this.workingCopies[0].getElementAt(src.indexOf("new BaseTargetClass"));
+	IMethod method = type.getMethod("methodToBePulledUp", new String[] {});
+	new SearchEngine(this.workingCopies).searchDeclarationsOfSentMessages(method, this.resultCollector, null);
+	assertSearchResults(
+		"src/issue3308/Test.java void void issue3308.Test$OriginalClass$NestedOriginalClass.setup():<anonymous>#1.methodHelper() [methodHelper()] EXACT_MATCH"
+	);
+}
+
+/**
+ * issue 3308: SearchEngine.searchDeclarationsOfSentMessages() does not support local or anonymous classes
+ * @see "https://github.com/eclipse-jdt/eclipse.jdt.core/issues/3308"
+ */
+public void testIssue3308b() throws CoreException {
+	this.workingCopies = new ICompilationUnit[1];
+	String src= """
+			package issue3308;
+			public class Test {
+				public class BaseTargetClass {
+				}
+
+				public class OriginalClass {
+					public int data = 60;
+
+					public void memberMethod() {
+					}
+
+					public class NestedOriginalClass extends BaseTargetClass {
+						void setup() {
+							new BaseTargetClass() {
+								int j = 1;
+
+								void methodToBePulledUp() {
+									j = 2;
+									methodHelper();
+								}
+
+								void methodHelper() {
+									System.out.println("Helper Method in Anonymous Class: " + data);
+								}
+							};
+						}
+					}
+				}
+			}
+			""";
+
+	this.workingCopies[0] = getWorkingCopy("/JavaSearchBugs/src/issue3308b/Test.java", src);
+	IType type = (IType) this.workingCopies[0].getElementAt(src.indexOf("new BaseTargetClass"));
+	IMethod method = type.getMethod("methodToBePulledUp", new String[] {});
+	new SearchEngine(this.workingCopies).searchDeclarationsOfAccessedFields(method, this.resultCollector, null);
+	assertSearchResults(
+		"src/issue3308b/Test.java void issue3308b.Test$OriginalClass$NestedOriginalClass.setup():<anonymous>#1.j [j] EXACT_MATCH"
+	);
 }
 
 private static String toString(char[][] modules) {

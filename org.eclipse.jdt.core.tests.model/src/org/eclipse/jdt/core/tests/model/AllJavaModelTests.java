@@ -56,8 +56,8 @@ private static Class[] getAllTestClasses() {
 
 		// Compilation unit tests
 		CompilationUnitTests.class,
-		// Compilation unitTests (Java 14)
-		CompilationUnitTests14.class,
+		// Compilation unitTests (Java 16)
+		CompilationUnitTests16.class,
 
 		// Source attachment tests
 		AttachSourceTests.class,
@@ -116,7 +116,7 @@ private static Class[] getAllTestClasses() {
 		ResolveTests10.class,
 		ResolveTests12To15.class,
 		ResolveTests21.class,
-		ResolveTests23.class,
+		ResolveTests25.class,
 		SelectionJavadocModelTests.class,
 
 		// Some test suite above breaks completion tests below
@@ -151,6 +151,7 @@ private static Class[] getAllTestClasses() {
 		ReconcilerTests16.class,
 		ReconcilerTests21.class,
 		ReconcilerStatementsRecoveryTests.class,
+		ReconcilerMultiReleaseTests.class,
 
 		// Copy and move operation tests
 		CopyMoveElementsTests.class,
@@ -203,6 +204,7 @@ private static Class[] getAllTestClasses() {
 
 		// Get source tests
 		GetSourceTests.class,
+		GetDerivedSourceTests.class,
 
 		// Create packages tests
 		CreatePackageTests.class,
@@ -212,6 +214,9 @@ private static Class[] getAllTestClasses() {
 
 		// Create search participant tests
 		SearchParticipantTests.class,
+
+		// Derived source search participant tests
+		DerivedSourceSearchParticipantTests.class,
 
 		// Class file tests
 		ClassFileTests.class,
@@ -235,11 +240,14 @@ private static Class[] getAllTestClasses() {
 		ExternalAnnotations18Test.class,
 		ExternalAnnotations9Test.class,
 
+		// Tests regarding resource-annotations (@Owning/@NotOwning):
+		OwningAnnotationModelTests.class,
+
 		// Java model changes related to Java 8
 		JavaElement8Tests.class,
 
 		Java9ElementTests.class,
-		Java21ElementTests.class,
+		Java25ElementTests.class,
 
 		NullAnnotationModelTests9.class,
 
