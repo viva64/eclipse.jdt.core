@@ -42,8 +42,10 @@ public ProblemMethodBinding(MethodBinding closestMatch, char[] selector, TypeBin
 	this(selector, args, problemReason);
 	this.closestMatch = closestMatch;
 	if (problemReason == ProblemReasons.Ambiguous) {
-		if (closestMatch instanceof PolyParameterizedGenericMethodBinding poly)
+		if (closestMatch instanceof PolyParameterizedGenericMethodBinding) {
+			PolyParameterizedGenericMethodBinding poly = (PolyParameterizedGenericMethodBinding) closestMatch;
 			poly.hasOverloads = true;
+		}
 	} else {
 		if (closestMatch != null) {
 			this.declaringClass = closestMatch.declaringClass;

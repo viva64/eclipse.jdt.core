@@ -459,8 +459,8 @@ public abstract class Scope {
 
 	static boolean isMalformedPair(TypeBinding t1, TypeBinding t2, Scope scope) {
 		// this is a combination from JLS 4.9 and private email communication (2017-09-13):
-		InferenceVariable iv1 = t1 instanceof InferenceVariable iv ? iv : null;
-		InferenceVariable iv2 = t2 instanceof InferenceVariable iv ? iv : null;
+		InferenceVariable iv1 = t1 instanceof InferenceVariable ? (InferenceVariable) t1 : null;
+		InferenceVariable iv2 = t2 instanceof InferenceVariable ? (InferenceVariable) t2 : null;
 		TypeVariableBinding tv1 = getTypeVariable(iv1 != null ? iv1.typeParameter : t1);
 		TypeVariableBinding tv2 = getTypeVariable(iv2 != null ? iv2.typeParameter : t2);
 		if (tv1 != null) {
@@ -1119,9 +1119,10 @@ public abstract class Scope {
 		Scope scope = this;
 		while (true) {
 			scope = scope.parent;
-			if (scope == null || scope instanceof MethodScope ms && ms.isStatic) {
+			if (scope == null || scope instanceof MethodScope && ((MethodScope) scope).isStatic) {
 				return null;
-			} else if (scope instanceof ClassScope cs) {
+			} else if (scope instanceof ClassScope) {
+				ClassScope cs = (ClassScope) scope;
 				return cs;
 			}
 		}
@@ -2091,7 +2092,8 @@ public abstract class Scope {
 										variableDeclaration.bits |= ASTNode.ShadowsOuterLocal;
 									}
 								}
-								if (resolvingGuardExpression && invocationSite instanceof NameReference nameReference) {
+								if (resolvingGuardExpression && invocationSite instanceof NameReference) {
+									NameReference nameReference = (NameReference) invocationSite;
 									nameReference.bits |= ASTNode.IsUsedInPatternGuard;
 									variableBinding.tagBits |= TagBits.HasToBeEffectivelyFinal;
 								}
@@ -2216,8 +2218,9 @@ public abstract class Scope {
 						if (importBinding.isStatic() && !importBinding.onDemand) {
 							if (CharOperation.equals(importBinding.getSimpleName(), name)) {
 								if (unitScope.resolveSingleImport(importBinding, Binding.TYPE | Binding.FIELD | Binding.METHOD) != null
-										&& importBinding.getResolvedImport() instanceof FieldBinding resolvedField)
+										&& importBinding.getResolvedImport() instanceof FieldBinding)
 								{
+									FieldBinding resolvedField = (FieldBinding) importBinding.getResolvedImport();
 									foundField = resolvedField;
 									ImportReference importReference = importBinding.reference;
 									if (importReference != null && needResolve) {
@@ -3594,13 +3597,16 @@ public abstract class Scope {
 				Binding resolvedImport = someImport.getResolvedImport();
 				ReferenceBinding temp = null;
 				if (inModules) {
-					if (resolvedImport instanceof ModuleBinding moduleBinding) {
+					if (resolvedImport instanceof ModuleBinding) {
+						ModuleBinding moduleBinding = (ModuleBinding) resolvedImport;
 						temp = findTypeInModule(name, moduleBinding, currentPackage);
 					}
 				} else {
-					if (resolvedImport instanceof PackageBinding packageBinding) {
+					if (resolvedImport instanceof PackageBinding) {
+						PackageBinding packageBinding = (PackageBinding) resolvedImport;
 						temp = findType(name, packageBinding, currentPackage);
-					} else if (resolvedImport instanceof ReferenceBinding referenceBinding) {
+					} else if (resolvedImport instanceof ReferenceBinding) {
+						ReferenceBinding referenceBinding = (ReferenceBinding) resolvedImport;
 						if (someImport.isStatic()) {
 							// Imports are always resolved in the CU Scope (bug 520874)
 							temp = compilationUnitScope().findMemberType(name, referenceBinding); // static imports are allowed to see inherited member types
@@ -3768,11 +3774,15 @@ public abstract class Scope {
 		if (!one.enterRecursiveFunction())
 			return true;
 		try {
-			if (one instanceof ParameterizedTypeBinding ptb1 && two instanceof ParameterizedTypeBinding ptb2) {
+			if (one instanceof ParameterizedTypeBinding && two instanceof ParameterizedTypeBinding) {
+				ParameterizedTypeBinding ptb1 = (ParameterizedTypeBinding) one;
+				ParameterizedTypeBinding ptb2 = (ParameterizedTypeBinding) two;
 				if (TypeBinding.notEquals(ptb1.erasure(), ptb2.erasure()))
 					return true;
 				return areSignificantlyDifferent(ptb1.arguments, ptb2.arguments);
-			} else if (one instanceof WildcardBinding wb1 && two instanceof WildcardBinding wb2) {
+			} else if (one instanceof WildcardBinding && two instanceof WildcardBinding) {
+				WildcardBinding wb1 = (WildcardBinding) one;
+				WildcardBinding wb2 = (WildcardBinding) two;
 				if (wb1.boundKind() != wb2.boundKind())
 					return true;
 				if (TypeBinding.notEquals(wb1.bound, wb2.bound))
@@ -3803,8 +3813,10 @@ public abstract class Scope {
 	public CaseStatement enclosingSwitchLabel() {
 		Scope scope = this;
 		do {
-			if (scope instanceof BlockScope bs)
+			if (scope instanceof BlockScope) {
+				BlockScope bs = (BlockScope) scope;
 				return bs.enclosingCase;
+			}
 			scope = scope.parent;
 		} while (scope != null);
 		return null;
@@ -4864,8 +4876,10 @@ public abstract class Scope {
 		ClassScope outerMostClassScope = null;
 		Scope scope = this;
 		do {
-			if (scope instanceof ClassScope classScope)
+			if (scope instanceof ClassScope) {
+				ClassScope classScope = (ClassScope) scope;
 				outerMostClassScope = classScope;
+			}
 			scope = scope.parent;
 		} while (scope != null);
 		return outerMostClassScope; // may answer null if no class around
@@ -4984,7 +4998,8 @@ public abstract class Scope {
 			TypeBinding param = parameters[i];
 			TypeBinding arg = arguments[i];
 			if (TypeBinding.notEquals(arg,param)) {
-				if (site instanceof Invocation invocation) {
+				if (site instanceof Invocation) {
+					Invocation invocation = (Invocation) site;
 					Expression[] invArgs = invocation.arguments();
 					int idx = i < invArgs.length ? i : invArgs.length - 1;
 					CapturingContext.enter(invArgs[idx].sourceStart, invArgs[idx].sourceEnd, this);
@@ -5537,7 +5552,7 @@ public abstract class Scope {
 							break;
 					}
 					if (!considerEnclosings
-							|| (currentTarget instanceof ReferenceBinding currentRefBind && !currentRefBind.hasEnclosingInstanceContext())) {
+							|| (currentTarget instanceof ReferenceBinding && !((ReferenceBinding) currentTarget).hasEnclosingInstanceContext())) {
 						break;
 					}
 					if (currentTarget.isStatic() || currentTarget.isLocalType())
@@ -5559,7 +5574,8 @@ public abstract class Scope {
 		List<ClassScope> list = null;
 		Scope skope = this;
 		while (skope != null) {
-			if (skope instanceof ClassScope cs && cs.insideEarlyConstructionContext) {
+			if (skope instanceof ClassScope && ((ClassScope) skope).insideEarlyConstructionContext) {
+				ClassScope cs = (ClassScope) skope;
 				if (list == null)
 					list = new ArrayList<>();
 				list.add(cs);

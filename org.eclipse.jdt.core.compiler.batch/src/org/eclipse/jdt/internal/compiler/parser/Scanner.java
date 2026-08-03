@@ -19,6 +19,7 @@ import static org.eclipse.jdt.internal.compiler.parser.TerminalToken.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.core.compiler.InvalidInputException;
 import org.eclipse.jdt.internal.compiler.CompilationResult;
@@ -653,10 +654,129 @@ protected final boolean lineBeginsWithMarkdown() throws InvalidInputException {
 public char[] getCurrentTextBlock() {
 	String normalizedBlock = this.normalizedTextBlock.toString();
 	try {
-		return normalizedBlock.stripIndent().translateEscapes().toCharArray();
+		return translateEscapes(stripIndent(normalizedBlock)).toCharArray();
 	} catch (Exception e) {
 		return normalizedBlock.toCharArray(); // errors are reported already, just return original.
 	}
+}
+/*
+ * Java 11 stand-in for String#stripIndent() (Java 15), following the same specification:
+ * remove the common incidental white space prefix and all trailing white space from every
+ * line, normalizing line terminators to \n.
+ */
+private static String stripIndent(String string) {
+	int length = string.length();
+	if (length == 0)
+		return ""; //$NON-NLS-1$
+	char lastChar = string.charAt(length - 1);
+	boolean optOut = lastChar == '\n' || lastChar == '\r';
+	List<String> lines = string.lines().collect(Collectors.toList());
+	final int outdent = optOut ? 0 : outdent(lines);
+	return lines.stream()
+			.map(line -> {
+				int firstNonWhitespace = indexOfNonWhitespace(line);
+				int lastNonWhitespace = lastIndexOfNonWhitespace(line);
+				int incidentalWhitespace = Math.min(outdent, firstNonWhitespace);
+				return firstNonWhitespace > lastNonWhitespace
+						? "" : line.substring(incidentalWhitespace, lastNonWhitespace); //$NON-NLS-1$
+			})
+			.collect(Collectors.joining("\n", "", optOut ? "\n" : "")); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
+}
+private static int outdent(List<String> lines) {
+	int outdent = Integer.MAX_VALUE;
+	for (String line : lines) {
+		int leadingWhitespace = indexOfNonWhitespace(line);
+		if (leadingWhitespace != line.length())
+			outdent = Math.min(outdent, leadingWhitespace);
+	}
+	String lastLine = lines.get(lines.size() - 1);
+	if (lastLine.isBlank())
+		outdent = Math.min(outdent, lastLine.length());
+	return outdent;
+}
+private static int indexOfNonWhitespace(String line) {
+	int length = line.length();
+	int index = 0;
+	while (index < length && Character.isWhitespace(line.charAt(index)))
+		index++;
+	return index;
+}
+private static int lastIndexOfNonWhitespace(String line) {
+	int index = line.length();
+	while (index > 0 && Character.isWhitespace(line.charAt(index - 1)))
+		index--;
+	return index;
+}
+/*
+ * Java 11 stand-in for String#translateEscapes() (Java 15), following the same specification.
+ * Unicode escapes are not handled here - they are already processed by the scanner.
+ */
+private static String translateEscapes(String string) {
+	if (string.isEmpty())
+		return ""; //$NON-NLS-1$
+	char[] chars = string.toCharArray();
+	int length = chars.length;
+	int from = 0;
+	int to = 0;
+	while (from < length) {
+		char ch = chars[from++];
+		if (ch == '\\') {
+			ch = from < length ? chars[from++] : '\0';
+			switch (ch) {
+				case 'b':
+					ch = '\b';
+					break;
+				case 'f':
+					ch = '\f';
+					break;
+				case 'n':
+					ch = '\n';
+					break;
+				case 'r':
+					ch = '\r';
+					break;
+				case 's':
+					ch = ' ';
+					break;
+				case 't':
+					ch = '\t';
+					break;
+				case '\'':
+				case '\"':
+				case '\\':
+					break;
+				case '0':
+				case '1':
+				case '2':
+				case '3':
+				case '4':
+				case '5':
+				case '6':
+				case '7':
+					int limit = Math.min(from + (ch <= '3' ? 2 : 1), length);
+					int code = ch - '0';
+					while (from < limit) {
+						ch = chars[from];
+						if (ch < '0' || '7' < ch)
+							break;
+						from++;
+						code = (code << 3) | (ch - '0');
+					}
+					ch = (char) code;
+					break;
+				case '\n':
+					continue;
+				case '\r':
+					if (from < length && chars[from] == '\n')
+						from++;
+					continue;
+				default:
+					throw new IllegalArgumentException("Invalid escape sequence: \\" + ch + " (" + (int) ch + ")"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+			}
+		}
+		chars[to++] = ch;
+	}
+	return new String(chars, 0, to);
 }
 public final String getCurrentStringLiteral() {
 	//return the token REAL source (aka unicodes are precomputed).

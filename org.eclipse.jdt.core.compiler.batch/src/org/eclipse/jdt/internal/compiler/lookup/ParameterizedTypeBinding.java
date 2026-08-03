@@ -170,7 +170,7 @@ public class ParameterizedTypeBinding extends ReferenceBinding implements Substi
 				return subType;
 		}
 
-		if (otherType instanceof ReferenceBinding otherRef && TypeBinding.equalsEquals(this.type, otherRef.actualType()))
+		if (otherType instanceof ReferenceBinding && TypeBinding.equalsEquals(this.type, ((ReferenceBinding) otherType).actualType()))
 			return this;
 
 		if (subType != this) //$IDENTITY-COMPARISON$

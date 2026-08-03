@@ -90,8 +90,10 @@ public static class LabelExpression {
 public Expression [] peeledLabelExpressions() {
 	Expression [] constants = Expression.NO_EXPRESSIONS;
 	for (Expression e : this.constantExpressions) {
-		if (e instanceof Pattern p)
+		if (e instanceof Pattern) {
+			Pattern p = (Pattern) e;
 			constants = Stream.concat(Arrays.stream(constants), Arrays.stream(p.getAlternatives())).toArray(Expression[]::new);
+		}
 		else
 			constants = Stream.concat(Arrays.stream(constants), Stream.of(e)).toArray(Expression[]::new);
 	}
@@ -99,8 +101,8 @@ public Expression [] peeledLabelExpressions() {
 }
 
 private boolean essentiallyQualifiedEnumerator(Expression e, TypeBinding selectorType) { // "Essentially" as in not "superfluously" qualified.
-	return e instanceof NameReference reference && reference.binding instanceof FieldBinding field
-				&& (field.modifiers & ClassFileConstants.AccEnum) != 0 && !TypeBinding.equalsEquals(e.resolvedType, selectorType); // <<-- essential qualification
+	return e instanceof NameReference && ((NameReference) e).binding instanceof FieldBinding
+				&& (((FieldBinding) ((NameReference) e).binding).modifiers & ClassFileConstants.AccEnum) != 0 && !TypeBinding.equalsEquals(e.resolvedType, selectorType); // <<-- essential qualification
 }
 
 private void checkDuplicateDefault(BlockScope scope, ASTNode node) {
@@ -134,7 +136,9 @@ private Constant resolveConstantLabel(BlockScope scope, TypeBinding caseType, Ty
 		if (((expression.bits & ASTNode.ParenthesizedMASK) >> ASTNode.ParenthesizedSHIFT) != 0)
 			scope.problemReporter().enumConstantsCannotBeSurroundedByParenthesis(expression);
 
-		if (expression instanceof NameReference reference && reference.binding instanceof FieldBinding field) {
+		if (expression instanceof NameReference && ((NameReference) expression).binding instanceof FieldBinding) {
+			NameReference reference = (NameReference) expression;
+			FieldBinding field = (FieldBinding) reference.binding;
 			if ((field.modifiers & ClassFileConstants.AccEnum) == 0)
 				 scope.problemReporter().enumSwitchCannotTargetField(reference, field);
 			else if (reference instanceof QualifiedNameReference && options.complianceLevel < ClassFileConstants.JDK21)
@@ -252,7 +256,8 @@ public void resolve(BlockScope scope) {
 			((SingleNameReference) e).setActualReceiverType((ReferenceBinding)selectorType);
 
 		e.setExpressionContext(ExpressionContext.TESTING_CONTEXT);
-		if (e instanceof Pattern p) {
+		if (e instanceof Pattern) {
+			Pattern p = (Pattern) e;
 			this.swich.containsPatterns = this.swich.isNonTraditional =  true;
 			p.setOuterExpressionType(selectorType);
 		} else if (count > 1 && nullCaseCount == 1) {
@@ -281,13 +286,17 @@ public void resolve(BlockScope scope) {
 				if (caseType.id != T_null) {
 					TypeBinding expectedCaseType = selectorType.isBoxedPrimitiveType() && JavaFeature.PRIMITIVES_IN_PATTERNS.isSupported(scope.compilerOptions()) ? selectorType.unboxedType() : selectorType;
 					switch (expectedCaseType.id) {
-						case TypeIds.T_long, TypeIds.T_float, TypeIds.T_double, TypeIds.T_boolean -> {
+						case TypeIds.T_long:
+						case TypeIds.T_float:
+						case TypeIds.T_double:
+						case TypeIds.T_boolean: {
 							if (caseType.id != expectedCaseType.id) {
 								scope.problemReporter().caseExpressionWrongType(e, selectorType, expectedCaseType);
 								continue;
 							}
 							if (Pattern.findPrimitiveConversionRoute(caseType, selectorType, scope, this) != Pattern.PrimitiveConversionRoute.NO_CONVERSION_ROUTE)
 								selectorType = expectedCaseType;
+							break;
 						}
 					}
 				}
@@ -309,7 +318,8 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 			local.useFlag = LocalVariableBinding.USED; // these are structurally required even if not touched
 
 	for (Expression e : this.constantExpressions) {
-		if (e instanceof NullLiteral && flowContext.associatedNode instanceof SwitchStatement swichStatement) {
+		if (e instanceof NullLiteral && flowContext.associatedNode instanceof SwitchStatement) {
+			SwitchStatement swichStatement = (SwitchStatement) flowContext.associatedNode;
 			Expression switchValue = swichStatement.expression;
 			if (switchValue != null && switchValue.nullStatus(flowInfo, flowContext) == FlowInfo.NON_NULL)
 				currentScope.problemReporter().unnecessaryNullCaseInSwitchOverNonNull(this);
@@ -327,7 +337,8 @@ public void generateCode(BlockScope currentScope, CodeStream codeStream) {
 	int pc = codeStream.position;
 	this.targetLabel.place();
 
-	if (this.constantExpressions.length > 0 && this.constantExpressions[0] instanceof Pattern pattern && (!pattern.isUnguarded() || pattern.containsPatternVariable(true))) {
+	if (this.constantExpressions.length > 0 && this.constantExpressions[0] instanceof Pattern && (!((Pattern) this.constantExpressions[0]).isUnguarded() || ((Pattern) this.constantExpressions[0]).containsPatternVariable(true))) {
+		Pattern pattern = (Pattern) this.constantExpressions[0];
 
 		BranchLabel patternMatchLabel = new BranchLabel(codeStream);
 		BranchLabel matchFailLabel = new BranchLabel(codeStream);
@@ -392,8 +403,10 @@ public void traverse(ASTVisitor visitor, 	BlockScope blockScope) {
 public Boolean getBooleanConstantValue() {
 	if (this.constantExpressions != null) {
 		for (Expression expression : this.constantExpressions) {
-			if (expression.constant instanceof BooleanConstant bc)
+			if (expression.constant instanceof BooleanConstant) {
+				BooleanConstant bc = (BooleanConstant) expression.constant;
 				return bc.booleanValue();
+			}
 		}
 	}
 	return null;

@@ -120,7 +120,7 @@ public class LambdaExpression extends FunctionalExpression implements IPolyExpre
 		for (Argument argument : this.arguments) {
 			if (argument.hasElidedType())
 				this.bits |= ArgumentsTypeElided;
-			else if (argument.type instanceof SingleTypeReference str &&  CharOperation.equals(str.token, TypeConstants.VAR)) {
+			else if (argument.type instanceof SingleTypeReference &&  CharOperation.equals(((SingleTypeReference) argument.type).token, TypeConstants.VAR)) {
 				this.bits |= ArgumentsTypeElided;
 				this.hasVarTypedArguments = true;
 			}
@@ -255,7 +255,7 @@ public class LambdaExpression extends FunctionalExpression implements IPolyExpre
 				final Argument argument = this.arguments[i];
 				if (argument.hasElidedType())
 					continue;
-				argumentIsVarTyped = argument.type instanceof SingleTypeReference singleTypeRef && CharOperation.equals(singleTypeRef.token, TypeConstants.VAR);
+				argumentIsVarTyped = argument.type instanceof SingleTypeReference && CharOperation.equals(((SingleTypeReference) argument.type).token, TypeConstants.VAR);
 				if (i > 0 && argumentIsVarTyped != priorArgumentIsVarTyped) {
 					blockScope.problemReporter().varCannotBeMixedWithNonVarParams(argumentIsVarTyped ? argument : this.arguments[i - 1]);
 					return this.resolvedType = null; // structurally FUBAR, bail out ...
@@ -1381,8 +1381,10 @@ public class LambdaExpression extends FunctionalExpression implements IPolyExpre
 		MethodScope currentMethodScope = this.scope.enclosingMethodScope();
 		if (currentMethodScope != null && currentMethodScope.isInsideInitializerOrConstructor()) {
 			// use synthetic constructor arguments if possible
-			if (currentMethodScope.enclosingSourceType() instanceof NestedTypeBinding nested)
+			if (currentMethodScope.enclosingSourceType() instanceof NestedTypeBinding) {
+				NestedTypeBinding nested = (NestedTypeBinding) currentMethodScope.enclosingSourceType();
 				return nested.getSyntheticArgument(enclosingType, true, currentMethodScope.isConstructorCall);
+			}
 		}
 		return null;
 	}

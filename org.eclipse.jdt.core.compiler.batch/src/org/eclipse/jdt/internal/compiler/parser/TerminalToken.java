@@ -203,11 +203,16 @@ public enum TerminalToken {
 	}
 
 	public static boolean isRestrictedKeyword(TerminalToken tokenType) {
-		return switch (tokenType) {
-			case TokenNameRestrictedIdentifierYield, TokenNameRestrictedIdentifierrecord, TokenNameRestrictedIdentifierWhen,
-					TokenNameRestrictedIdentifiersealed, TokenNameRestrictedIdentifierpermits -> true;
-			default -> false;
-		};
+		switch (tokenType) {
+			case TokenNameRestrictedIdentifierYield:
+			case TokenNameRestrictedIdentifierrecord:
+			case TokenNameRestrictedIdentifierWhen:
+			case TokenNameRestrictedIdentifiersealed:
+			case TokenNameRestrictedIdentifierpermits:
+				return true;
+			default:
+				return false;
+		}
 	}
 
 	public static TerminalToken getRestrictedKeyword(char [] text) {
@@ -224,14 +229,20 @@ public enum TerminalToken {
 	}
 
 	public static TerminalToken getRestrictedKeyword(String text) {
-		return switch (text) {
-			case "yield"   -> TokenNameRestrictedIdentifierYield;   //$NON-NLS-1$
-			case "record"  -> TokenNameRestrictedIdentifierrecord;  //$NON-NLS-1$
-			case "when"    -> TokenNameRestrictedIdentifierWhen;    //$NON-NLS-1$
-			case "sealed"  -> TokenNameRestrictedIdentifiersealed;  //$NON-NLS-1$
-			case "permits" -> TokenNameRestrictedIdentifierpermits; //$NON-NLS-1$
-			default        -> TokenNameNotAToken;
-		};
+		switch (text) {
+			case "yield": //$NON-NLS-1$
+				return TokenNameRestrictedIdentifierYield;
+			case "record": //$NON-NLS-1$
+				return TokenNameRestrictedIdentifierrecord;
+			case "when": //$NON-NLS-1$
+				return TokenNameRestrictedIdentifierWhen;
+			case "sealed": //$NON-NLS-1$
+				return TokenNameRestrictedIdentifiersealed;
+			case "permits": //$NON-NLS-1$
+				return TokenNameRestrictedIdentifierpermits;
+			default:
+				return TokenNameNotAToken;
+		}
 	}
 
 	public static TerminalToken of(int act) {

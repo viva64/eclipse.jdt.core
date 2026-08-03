@@ -96,7 +96,8 @@ public FlowInfo analyseAssignment(BlockScope currentScope, FlowContext flowConte
 			&& !(this.receiver instanceof QualifiedThisReference)
 			&& ((this.receiver.bits & ASTNode.ParenthesizedMASK) == 0) // (this).x is forbidden
 			&& currentScope.allowBlankFinalFieldAssignment(this.binding)
-			&& (!(currentScope.methodScope().referenceContext instanceof ConstructorDeclaration cd) || !cd.isCompactConstructor())) {
+			&& (!(currentScope.methodScope().referenceContext instanceof ConstructorDeclaration)
+					|| !((ConstructorDeclaration) currentScope.methodScope().referenceContext).isCompactConstructor())) {
 			if (flowInfo.isPotentiallyAssigned(this.binding)) {
 				currentScope.problemReporter().duplicateInitializationOfBlankFinalField(
 					this.binding,
@@ -106,7 +107,7 @@ public FlowInfo analyseAssignment(BlockScope currentScope, FlowContext flowConte
 			}
 			flowInfo.markAsDefinitelyAssigned(this.binding);
 		} else {
-			if (currentScope.methodScope().referenceContext instanceof ConstructorDeclaration cd && cd.isCompactConstructor())
+			if (currentScope.methodScope().referenceContext instanceof ConstructorDeclaration && ((ConstructorDeclaration) currentScope.methodScope().referenceContext).isCompactConstructor())
 				currentScope.problemReporter().illegalExplicitAssignmentInCompactConstructor(this.binding, this);
 			else
 			// assigning a final field outside an initializer or constructor or wrong reference

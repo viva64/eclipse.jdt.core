@@ -205,11 +205,14 @@ public class LookupEnvironment implements ProblemReasons, TypeConstants {
 		}
 
 		boolean isRequired(boolean buildFieldsAndMethods, boolean resolveAnnotations) {
-			return switch (this) {
-				case BUILD_FIELDS_AND_METHODS -> buildFieldsAndMethods;
-				case INTEGRATE_ANNOTATIONS_IN_HIERARCHY -> resolveAnnotations;
-				default -> true;
-			};
+			switch (this) {
+				case BUILD_FIELDS_AND_METHODS:
+					return buildFieldsAndMethods;
+				case INTEGRATE_ANNOTATIONS_IN_HIERARCHY:
+					return resolveAnnotations;
+				default:
+					return true;
+			}
 		}
 
 		/** values without NONE */
@@ -217,14 +220,29 @@ public class LookupEnvironment implements ProblemReasons, TypeConstants {
 
 		void perform(CompilationUnitScope scope) {
 			switch (this) {
-				case CHECK_AND_SET_IMPORTS -> scope.checkAndSetImports();
-				case CONNECT_TYPE_HIERARCHY -> scope.connectTypeHierarchy();
-				case SEAL_TYPE_HIERARCHY -> scope.sealTypeHierarchy();
-				case COLLATE_RECORD_COMPONENTS -> scope.buildComponents();
-				case BUILD_FIELDS_AND_METHODS -> scope.buildFieldsAndMethods();
-				case INTEGRATE_ANNOTATIONS_IN_HIERARCHY -> scope.integrateAnnotationsInHierarchy();
-				case CHECK_PARAMETERIZED_TYPES -> scope.checkParameterizedTypes();
-				default -> throw new IllegalArgumentException("No implementation for: " + this); //$NON-NLS-1$
+				case CHECK_AND_SET_IMPORTS:
+					scope.checkAndSetImports();
+					break;
+				case CONNECT_TYPE_HIERARCHY:
+					scope.connectTypeHierarchy();
+					break;
+				case SEAL_TYPE_HIERARCHY:
+					scope.sealTypeHierarchy();
+					break;
+				case COLLATE_RECORD_COMPONENTS:
+					scope.buildComponents();
+					break;
+				case BUILD_FIELDS_AND_METHODS:
+					scope.buildFieldsAndMethods();
+					break;
+				case INTEGRATE_ANNOTATIONS_IN_HIERARCHY:
+					scope.integrateAnnotationsInHierarchy();
+					break;
+				case CHECK_PARAMETERIZED_TYPES:
+					scope.checkParameterizedTypes();
+					break;
+				default:
+					throw new IllegalArgumentException("No implementation for: " + this);
 			}
 		}
 	}
@@ -1560,9 +1578,9 @@ private TypeBinding normalizeWildcardBound(TypeBinding bound, int boundKind) {
 }
 private WildcardBinding normalizeWildcard(WildcardBinding wildcard) {
 	if (wildcard.boundKind == Wildcard.EXTENDS
-			&& wildcard.bound instanceof CaptureBinding wildCap
-			&& wildCap.wildcard != null) // null happens for CaptureBinding18
-		return wildCap.wildcard;
+			&& wildcard.bound instanceof CaptureBinding
+			&& ((CaptureBinding) wildcard.bound).wildcard != null) // null happens for CaptureBinding18
+		return ((CaptureBinding) wildcard.bound).wildcard;
 	return wildcard;
 }
 
@@ -1753,7 +1771,8 @@ public boolean isNonNullByDefaultSimpleName(char[] simpleName) {
  * @return A bit from {@link ExtendedTagBits} encoding the check result, or {@code 0}.
  */
 public long checkForMissingAnalysisAnnotation(TypeBinding resolvedType) {
-	if (resolvedType instanceof MissingTypeBinding missing) {
+	if (resolvedType instanceof MissingTypeBinding) {
+		MissingTypeBinding missing = (MissingTypeBinding) resolvedType;
 		if (this.globalOptions.isAnnotationBasedResourceAnalysisEnabled) {
 			if ((getAnalysisAnnotationBit(missing.compoundName) & TypeIds.BitAnyOwningAnnotation) != 0)
 				return ExtendedTagBits.HasMissingOwningAnnotation;

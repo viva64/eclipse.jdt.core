@@ -284,7 +284,8 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
 	private boolean isIntersectionType(TypeBinding parameter) {
 		if (parameter.isIntersectionType() || parameter.isIntersectionType18())
 			return true;
-		if (parameter instanceof TypeVariableBinding tvb) {
+		if (parameter instanceof TypeVariableBinding) {
+			TypeVariableBinding tvb = (TypeVariableBinding) parameter;
 			return isIntersectionType(tvb.upperBound());
 		}
 		return false;
@@ -738,7 +739,8 @@ public class ReferenceExpression extends FunctionalExpression implements IPolyEx
         if (isMethodReference) {
         	someMethod = scope.getMethod(this.receiverType, this.selector, descriptorParameters, this);
         } else {
-        	if (this.receiverType instanceof LocalTypeBinding local && !local.isRecord()) { // local records are implicitly static and don't have enclosing instance
+        	if (this.receiverType instanceof LocalTypeBinding && !((LocalTypeBinding) this.receiverType).isRecord()) {
+        		LocalTypeBinding local = (LocalTypeBinding) this.receiverType; // local records are implicitly static and don't have enclosing instance
         		MethodScope enclosingMethodScope = local.scope.enclosingMethodScope();
         		if (enclosingMethodScope != null && !enclosingMethodScope.isStatic && scope.isInStaticContext()) {
         			scope.problemReporter().allocationInStaticContext(this, local);

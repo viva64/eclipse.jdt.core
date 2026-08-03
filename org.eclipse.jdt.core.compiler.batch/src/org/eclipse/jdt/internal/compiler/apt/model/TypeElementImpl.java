@@ -129,7 +129,7 @@ public class TypeElementImpl extends ElementImpl implements TypeElement {
 	@Override
 	public List<? extends Element> getEnclosedElements() {
 		ReferenceBinding binding = (ReferenceBinding)this._binding;
-		MethodBinding[] methods = (binding instanceof BinaryTypeBinding btb) ? btb.methodsInOriginalOrder() : binding.methods();
+		MethodBinding[] methods = (binding instanceof BinaryTypeBinding) ? ((BinaryTypeBinding) binding).methodsInOriginalOrder() : binding.methods();
 		List<Element> enclosed = new ArrayList<>(binding.fieldCount() + methods.length + binding.memberTypes().length);
 		for (MethodBinding method : methods) {
 			ExecutableElement executable = new ExecutableElementImpl(this._env, method);
@@ -190,7 +190,8 @@ public class TypeElementImpl extends ElementImpl implements TypeElement {
 	@Override
 	public Element getEnclosingElement() {
 		ReferenceBinding binding = (ReferenceBinding)this._binding;
-		if (binding instanceof LocalTypeBinding local && this.getKind() == ElementKind.ENUM) {
+		if (binding instanceof LocalTypeBinding && this.getKind() == ElementKind.ENUM) {
+			LocalTypeBinding local = (LocalTypeBinding) binding;
 			TypeDeclaration typeDecl = local.scope.referenceContext;
 			if (typeDecl.allocation != null && typeDecl.allocation.enumConstant != null) {
 				FieldBinding fBinding = typeDecl.allocation.enumConstant.binding;

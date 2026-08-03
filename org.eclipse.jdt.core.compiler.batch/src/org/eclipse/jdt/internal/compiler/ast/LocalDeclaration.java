@@ -324,8 +324,10 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 			} else {
 				if (varTypedLocal) {
 					this.binding.useFlag = LocalVariableBinding.ILLEGAL_SELF_REFERENCE_IF_USED; // hijack analysis phase flag
-					if (this.initialization instanceof CastExpression castExpression)
+					if (this.initialization instanceof CastExpression) {
+						CastExpression castExpression = (CastExpression) this.initialization;
 						castExpression.setVarTypeDeclaration(true);
+					}
 				}
 				this.initialization.setExpressionContext(varTypedLocal ? VANILLA_CONTEXT : ASSIGNMENT_CONTEXT);
 				this.initialization.setExpectedType(variableType);

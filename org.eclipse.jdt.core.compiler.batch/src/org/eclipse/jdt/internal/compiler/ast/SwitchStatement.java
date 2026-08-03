@@ -61,7 +61,49 @@ import org.eclipse.jdt.internal.compiler.problem.ProblemSeverities;
 public class SwitchStatement extends Expression {
 
 	/** Descriptor for a bootstrap method that is created only once but can be used more than once. */
-	public static record SingletonBootstrap(String id, char[] selector, char[] signature) { }
+	public static final class SingletonBootstrap {
+		private final String id;
+		private final char[] selector;
+		private final char[] signature;
+
+		public SingletonBootstrap(String id, char[] selector, char[] signature) {
+			this.id = id;
+			this.selector = selector;
+			this.signature = signature;
+		}
+
+		public String id() {
+			return this.id;
+		}
+
+		public char[] selector() {
+			return this.selector;
+		}
+
+		public char[] signature() {
+			return this.signature;
+		}
+
+		@Override
+		public boolean equals(Object obj) { // same semantics as the record this used to be: arrays compared by identity
+			if (this == obj)
+				return true;
+			if (!(obj instanceof SingletonBootstrap))
+				return false;
+			SingletonBootstrap other = (SingletonBootstrap) obj;
+			return (this.id == null ? other.id == null : this.id.equals(other.id))
+					&& this.selector == other.selector
+					&& this.signature == other.signature;
+		}
+
+		@Override
+		public int hashCode() {
+			int result = this.id == null ? 0 : this.id.hashCode();
+			result = 31 * result + System.identityHashCode(this.selector);
+			result = 31 * result + System.identityHashCode(this.signature);
+			return result;
+		}
+	}
 	/** represents {@link ConstantBootstraps#primitiveClass(java.lang.invoke.MethodHandles.Lookup, String, Class)}*/
 	public static final SingletonBootstrap PRIMITIVE_CLASS__BOOTSTRAP = new SingletonBootstrap(
 			CONSTANT_BOOTSTRAP__PRIMITIVE_CLASS, PRIMITIVE_CLASS, PRIMITIVE_CLASS__SIGNATURE);
@@ -148,8 +190,10 @@ public class SwitchStatement extends Expression {
 		}
 
 		void addPattern(Pattern p) {
-			if (p instanceof RecordPattern rp && TypeBinding.equalsEquals(this.type, rp.type.resolvedType) && this.firstComponent != null)
+			if (p instanceof RecordPattern && TypeBinding.equalsEquals(this.type, ((RecordPattern) p).type.resolvedType) && this.firstComponent != null) {
+				RecordPattern rp = (RecordPattern) p;
 				this.firstComponent.addPattern(rp, 0);
+			}
 		}
 
 		@Override
@@ -268,7 +312,8 @@ public class SwitchStatement extends Expression {
 					availableTypes.add(child.type);
 				}
 			}
-			if (node.type instanceof ReferenceBinding ref && ref.isSealed()) {
+			if (node.type instanceof ReferenceBinding && ((ReferenceBinding) node.type).isSealed()) {
+				ReferenceBinding ref = (ReferenceBinding) node.type;
 				this.covers &= caseElementsCoverSealedType(ref, availableTypes);
 				return this.covers;
 			}
@@ -279,7 +324,8 @@ public class SwitchStatement extends Expression {
 	private void preprocess() { // make a pass over the switch block and allocate vectors.
 		int n = 0;
 		for (final Statement statement : this.statements) {
-			if (statement instanceof CaseStatement caseStatement) {
+			if (statement instanceof CaseStatement) {
+				CaseStatement caseStatement = (CaseStatement) statement;
 				n++;
 				int count = 0;
 				for (Expression e : caseStatement.peeledLabelExpressions()) {
@@ -295,11 +341,19 @@ public class SwitchStatement extends Expression {
 	}
 
 	boolean integralType(TypeBinding type) {
-		return switch (type.id) {
-			case TypeIds.T_char, TypeIds.T_byte, TypeIds.T_short, TypeIds.T_int,
-			     TypeIds.T_JavaLangCharacter, TypeIds.T_JavaLangByte, TypeIds.T_JavaLangShort, TypeIds.T_JavaLangInteger -> true;
-			     default -> false;
-		};
+		switch (type.id) {
+			case TypeIds.T_char:
+			case TypeIds.T_byte:
+			case TypeIds.T_short:
+			case TypeIds.T_int:
+			case TypeIds.T_JavaLangCharacter:
+			case TypeIds.T_JavaLangByte:
+			case TypeIds.T_JavaLangShort:
+			case TypeIds.T_JavaLangInteger:
+				return true;
+			default:
+				return false;
+		}
 	}
 
 	private boolean duplicateConstant(LabelExpression current, LabelExpression prior) {
@@ -316,12 +370,13 @@ public class SwitchStatement extends Expression {
 
 	void gatherLabelExpression(LabelExpression labelExpression) {
 		// domination check
-		if (labelExpression.expression instanceof Pattern pattern) {
+		if (labelExpression.expression instanceof Pattern) {
+			Pattern pattern = (Pattern) labelExpression.expression;
 			if (this.defaultCase != null) {
 				this.scope.problemReporter().patternDominatedByAnother(pattern);
 			} else {
 				for (int i = 0; i < this.labelExpressionIndex; i++) {
-					if (this.labelExpressions[i].expression instanceof Pattern priorPattern && priorPattern.dominates(pattern, this.scope)) {
+					if (this.labelExpressions[i].expression instanceof Pattern && ((Pattern) this.labelExpressions[i].expression).dominates(pattern, this.scope)) {
 						this.scope.problemReporter().patternDominatedByAnother(pattern);
 						break;
 					}
@@ -334,7 +389,8 @@ public class SwitchStatement extends Expression {
 			} else {
 				TypeBinding boxedType = labelExpression.type.isBaseType() ? this.scope.environment().computeBoxingType(labelExpression.type) : labelExpression.type;
 				for (int i = 0; i < this.labelExpressionIndex; i++) {
-					if (this.labelExpressions[i].expression instanceof Pattern priorPattern) {
+					if (this.labelExpressions[i].expression instanceof Pattern) {
+						Pattern priorPattern = (Pattern) this.labelExpressions[i].expression;
 						if (priorPattern.coversType(boxedType, this.scope)) {
 							this.scope.problemReporter().patternDominatedByAnother(labelExpression.expression);
 							break;
@@ -427,7 +483,8 @@ public class SwitchStatement extends Expression {
 			}
 			for (int j = 0; j < constantCount; j++) {
 				if (TypeBinding.equalsEquals(this.labelExpressions[j].expression.resolvedType, enumType)) {
-					if (this.labelExpressions[j].expression instanceof NameReference reference) {
+					if (this.labelExpressions[j].expression instanceof NameReference) {
+						NameReference reference = (NameReference) this.labelExpressions[j].expression;
 						if (enumConstant.id == reference.fieldBinding().original().id) {
 							unenumerated.remove(enumConstant);
 							break;
@@ -449,11 +506,22 @@ public class SwitchStatement extends Expression {
 		if (JavaFeature.PATTERN_MATCHING_IN_SWITCH.isSupported(upperScope.compilerOptions())) {
 			boolean nonTraditionalSelector = !expressionType.isEnum();
 			switch (expressionType.id) {
-				case TypeIds.T_char, TypeIds.T_byte, TypeIds.T_short, TypeIds.T_int,
-				     TypeIds.T_long, TypeIds.T_double, TypeIds.T_boolean, TypeIds.T_float,
-					 TypeIds.T_void, TypeIds.T_JavaLangCharacter, TypeIds.T_JavaLangByte,
-					 TypeIds.T_JavaLangShort, TypeIds.T_JavaLangInteger, TypeIds.T_JavaLangString:
-						 nonTraditionalSelector = false;
+				case TypeIds.T_char:
+				case TypeIds.T_byte:
+				case TypeIds.T_short:
+				case TypeIds.T_int:
+				case TypeIds.T_long:
+				case TypeIds.T_double:
+				case TypeIds.T_boolean:
+				case TypeIds.T_float:
+				case TypeIds.T_void:
+				case TypeIds.T_JavaLangCharacter:
+				case TypeIds.T_JavaLangByte:
+				case TypeIds.T_JavaLangShort:
+				case TypeIds.T_JavaLangInteger:
+				case TypeIds.T_JavaLangString:
+					nonTraditionalSelector = false;
+					break;
 			}
 			if (nonTraditionalSelector || this.containsPatterns || this.containsNull) {
 				return true;
@@ -461,9 +529,15 @@ public class SwitchStatement extends Expression {
 		}
 		if (JavaFeature.PRIMITIVES_IN_PATTERNS.isSupported(upperScope.compilerOptions())) {
 			switch (expressionType.id) {
-				case TypeIds.T_float, TypeIds.T_double, TypeIds.T_long, TypeIds.T_boolean, TypeIds.T_JavaLangFloat,
-				     TypeIds.T_JavaLangDouble, TypeIds.T_JavaLangLong, TypeIds.T_JavaLangBoolean:
-				    	 return true;
+				case TypeIds.T_float:
+				case TypeIds.T_double:
+				case TypeIds.T_long:
+				case TypeIds.T_boolean:
+				case TypeIds.T_JavaLangFloat:
+				case TypeIds.T_JavaLangDouble:
+				case TypeIds.T_JavaLangLong:
+				case TypeIds.T_JavaLangBoolean:
+					return true;
 			}
 		}
 		return false;
@@ -538,11 +612,17 @@ public class SwitchStatement extends Expression {
 		if (eType == null)
 			return false;
 		switch (eType.id) {
-			case TypeIds.T_JavaLangLong, TypeIds.T_JavaLangFloat, TypeIds.T_JavaLangDouble:
+			case TypeIds.T_JavaLangLong:
+			case TypeIds.T_JavaLangFloat:
+			case TypeIds.T_JavaLangDouble:
 				return true;
-			case TypeIds.T_boolean, TypeIds.T_long, TypeIds.T_double, TypeIds.T_float :
+			case TypeIds.T_boolean:
+			case TypeIds.T_long:
+			case TypeIds.T_double:
+			case TypeIds.T_float:
 				if (this.isPrimitiveSwitch)
 					return true;
+				break;
 			// note: if no patterns are present we optimize Boolean to use unboxing rather than indy typeSwitch
 		}
 		return !(eType.isPrimitiveOrBoxedPrimitiveType() || eType.isEnum() || eType.id == TypeIds.T_JavaLangString); // classic selectors
@@ -596,7 +676,8 @@ public class SwitchStatement extends Expression {
 				LocalVariableBinding[] patternVariables = NO_VARIABLES;
 				boolean trueSeen = false, falseSeen = false;
 				for (final Statement statement : this.statements) {
-					if (statement instanceof CaseStatement caseStatement) {
+					if (statement instanceof CaseStatement) {
+						CaseStatement caseStatement = (CaseStatement) statement;
 						caseStatement.swich = this;
 						caseStatement.resolve(this.scope);
 						patternVariables = caseStatement.bindingsWhenTrue();
@@ -682,7 +763,8 @@ public class SwitchStatement extends Expression {
 				int prevCaseStmtIndex = -100;
 				for (int i = 0, max = this.statements.length; i < max; i++) {
 					Statement statement = this.statements[i];
-					if (statement instanceof CaseStatement caseStatement) {
+					if (statement instanceof CaseStatement) {
+						CaseStatement caseStatement = (CaseStatement) statement;
 						this.scope.enclosingCase = caseStatement; // record entering in a switch case block
 						if (prevCaseStmtIndex == i - 1 && this.statements[prevCaseStmtIndex].containsPatternVariable())
 							this.scope.problemReporter().illegalFallthroughFromAPattern(this.statements[prevCaseStmtIndex]);
@@ -753,7 +835,7 @@ public class SwitchStatement extends Expression {
 		}
 	}
 
-	abstract static sealed class SwitchTranslator {
+	abstract static class SwitchTranslator {
 
 		protected SwitchStatement swich;
 		int [] constants; // case constants or proxies;
@@ -825,13 +907,14 @@ public class SwitchStatement extends Expression {
 		protected final void generateSwitchBlock (BlockScope currentScope, CodeStream codeStream) {
 			if (this.swich.statements != null) {
 				for (Statement statement : this.swich.statements) {
-					if (statement instanceof CaseStatement caseStatement) {
+					if (statement instanceof CaseStatement) {
+						CaseStatement caseStatement = (CaseStatement) statement;
 						this.swich.scope.enclosingCase = caseStatement; // record entering in a switch case block
 						if (this.swich.preSwitchInitStateIndex != -1)
 							codeStream.removeNotDefinitelyAssignedVariables(currentScope, this.swich.preSwitchInitStateIndex);
 					}
 					statement.generateCode(this.swich.scope, codeStream);
-					if (statement instanceof Block block && (block.bits & BlockShouldEndDead) != 0)
+					if (statement instanceof Block && (((Block) statement).bits & BlockShouldEndDead) != 0)
 						codeStream.goto_(this.swich.breakLabel);
 				}
 			}
@@ -910,7 +993,17 @@ public class SwitchStatement extends Expression {
 
 		final static class StringSwitchTranslator extends SwitchTranslator {
 
-			private record StringCaseConstant(int hashKode, String string, BranchLabel label) implements Comparable<StringCaseConstant> {
+			private static final class StringCaseConstant implements Comparable<StringCaseConstant> {
+				private final int hashKode;
+				private final String string;
+				private final BranchLabel label;
+
+				StringCaseConstant(int hashKode, String string, BranchLabel label) {
+					this.hashKode = hashKode;
+					this.string = string;
+					this.label = label;
+				}
+
 				@Override
 				public int compareTo(StringCaseConstant that) {
 					return this.hashKode == that.hashKode ? 0 : this.hashKode > that.hashKode ? 1 : -1; // can't use just '-' due to potential overflow/underflow
@@ -1027,21 +1120,29 @@ public class SwitchStatement extends Expression {
 			}
 
 			private char[] typeSwitchSignature(TypeBinding exprType) {
-				char[] arg1 = switch (exprType.id) {
-					case TypeIds.T_JavaLangLong, TypeIds.T_JavaLangFloat, TypeIds.T_JavaLangDouble, TypeIds.T_JavaLangBoolean,
-						TypeIds.T_JavaLangByte, TypeIds.T_JavaLangShort, TypeIds.T_JavaLangInteger, TypeIds.T_JavaLangCharacter->
-						this.swich.isPrimitiveSwitch
-						? exprType.signature()
-						: "Ljava/lang/Object;".toCharArray(); //$NON-NLS-1$
-					default -> {
+				char[] arg1;
+				switch (exprType.id) {
+					case TypeIds.T_JavaLangLong:
+					case TypeIds.T_JavaLangFloat:
+					case TypeIds.T_JavaLangDouble:
+					case TypeIds.T_JavaLangBoolean:
+					case TypeIds.T_JavaLangByte:
+					case TypeIds.T_JavaLangShort:
+					case TypeIds.T_JavaLangInteger:
+					case TypeIds.T_JavaLangCharacter:
+						arg1 = this.swich.isPrimitiveSwitch
+							? exprType.signature()
+							: "Ljava/lang/Object;".toCharArray(); //$NON-NLS-1$
+						break;
+					default:
 						if (exprType.id > TypeIds.T_LastWellKnownTypeId && exprType.erasure().isBoxedPrimitiveType())
-							yield exprType.erasure().signature(); // <T extends Integer> / <? extends Short> ...
+							arg1 = exprType.erasure().signature(); // <T extends Integer> / <? extends Short> ...
 						else
-							yield exprType.isPrimitiveType() || exprType.isEnum()
+							arg1 = exprType.isPrimitiveType() || exprType.isEnum()
 								? exprType.signature()
 								: "Ljava/lang/Object;".toCharArray(); //$NON-NLS-1$
-					}
-				};
+						break;
+				}
 				return CharOperation.concat("(".toCharArray(), arg1, "I)I".toCharArray()); //$NON-NLS-1$ //$NON-NLS-2$
 			}
 

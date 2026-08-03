@@ -719,11 +719,12 @@ public void updateFromParserState(){
 			int length = parser.astLengthStack[parser.astLengthPtr];
 			int astPtr = parser.astPtr - length;
 			boolean canConsume = astPtr >= 0;
-			TypeDeclaration typeDecl = canConsume && parser.astStack[astPtr] instanceof TypeDeclaration td ? td : null;
+			TypeDeclaration typeDecl = canConsume && parser.astStack[astPtr] instanceof TypeDeclaration ? (TypeDeclaration) parser.astStack[astPtr] : null;
 			boolean needUpdateRParenPos = parser.rParenPos < parser.lParenPos;
 			if (typeDecl != null) {
 				for (int i = 1, max = length + 1; i < max; i++) {
-					if (typeDecl.isRecord() && parser.parsingRecordComponents && parser.astStack[astPtr + i ] instanceof RecordComponent component) {
+					if (typeDecl.isRecord() && parser.parsingRecordComponents && parser.astStack[astPtr + i ] instanceof RecordComponent) {
+						RecordComponent component = (RecordComponent) parser.astStack[astPtr + i ];
 						if (needUpdateRParenPos)
 							parser.rParenPos = component.sourceEnd + 1;
 						continue; // so far so good

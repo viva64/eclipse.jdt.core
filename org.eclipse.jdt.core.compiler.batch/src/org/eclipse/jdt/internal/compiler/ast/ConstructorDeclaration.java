@@ -243,7 +243,8 @@ public void analyseCode(ClassScope classScope, InitializationFlowContext initial
 						foundConstructor = true; 	// no more checking for subsequent statements
 					}
 					continue;							// skip statements already processed during PROLOGUE analysis
-				} else if (mode == AnalysisMode.PROLOGUE && stat instanceof ExplicitConstructorCall ctorCall) {
+				} else if (mode == AnalysisMode.PROLOGUE && stat instanceof ExplicitConstructorCall) {
+					ExplicitConstructorCall ctorCall = (ExplicitConstructorCall) stat;
 					complainAboutInitializedFinalFields(flowInfo, ctorCall);
 				}
 				if ((complaintLevel = stat.complainIfUnreachable(flowInfo, this.scope, complaintLevel, true)) < Statement.COMPLAINED_UNREACHABLE) {

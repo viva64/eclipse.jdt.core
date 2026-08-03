@@ -184,10 +184,12 @@ public class ClassScope extends Scope {
 				continue;
 			}
 			// Create a field binding for the declared or derived field - its type will be patched up later while resolving for field
-			if (variableDeclaration instanceof FieldDeclaration field) {
+			if (variableDeclaration instanceof FieldDeclaration) {
+				FieldDeclaration field = (FieldDeclaration) variableDeclaration;
 				fieldBinding = new FieldBinding(field, null, field.modifiers | ExtraCompilerModifiers.AccUnresolved, sourceType);
 				checkAndSetModifiersForField(fieldBinding, field);
-			} else if (variableDeclaration instanceof RecordComponent componentDeclaration) {
+			} else if (variableDeclaration instanceof RecordComponent) {
+				RecordComponent componentDeclaration = (RecordComponent) variableDeclaration;
 				// prefer type from the binding as it holds the null annotations if any:
 				TypeBinding type = componentDeclaration.binding != null ? componentDeclaration.binding.type : variableDeclaration.type.resolvedType;
 				fieldBinding = new SyntheticFieldBinding(variableDeclaration.name, type,
@@ -218,8 +220,10 @@ public class ClassScope extends Scope {
 			} else {
 				knownFieldNames.put(variableDeclaration.name, fieldBinding);
 				fieldBindings[count++] = fieldBinding;
-				if (variableDeclaration instanceof RecordComponent componentDecl && fieldBinding instanceof SyntheticFieldBinding)
+				if (variableDeclaration instanceof RecordComponent && fieldBinding instanceof SyntheticFieldBinding) {
+					RecordComponent componentDecl = (RecordComponent) variableDeclaration;
 					sourceType.addSyntheticRecordState(componentDecl, fieldBinding);
+				}
 			}
 		}
 		// remove duplicate fields
@@ -602,7 +606,8 @@ public class ClassScope extends Scope {
 						}
 					}
 			    }
-			} else if (this.parent instanceof ClassScope classScope && classScope.referenceContext != null) {
+			} else if (this.parent instanceof ClassScope && ((ClassScope) this.parent).referenceContext != null) {
+				ClassScope classScope = (ClassScope) this.parent;
 				TypeDeclaration typeDecl = classScope.referenceContext;
 				if (TypeDeclaration.kind(typeDecl.modifiers) == TypeDeclaration.INTERFACE_DECL) {
 					// Sec 8.1.3 applies for local types as well

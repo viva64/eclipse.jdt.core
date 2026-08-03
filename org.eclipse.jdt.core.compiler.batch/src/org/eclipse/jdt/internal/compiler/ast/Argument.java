@@ -103,7 +103,7 @@ public class Argument extends LocalDeclaration {
 				if (!this.isUnnamed(scope)) {
 					if ((this.bits & ASTNode.ShadowsOuterLocal) != 0 && scope.isLambdaSubscope()) {
 						scope.problemReporter().lambdaRedeclaresArgument(this);
-					} else if (scope.referenceContext instanceof ConstructorDeclaration cd && cd.isCompactConstructor()) {
+					} else if (scope.referenceContext instanceof ConstructorDeclaration && ((ConstructorDeclaration) scope.referenceContext).isCompactConstructor()) {
 						// skip error reporting - hidden params - already reported in record components
 					} else {
 						scope.problemReporter().redefineArgument(this);

@@ -35,7 +35,8 @@ final class ReferenceBindingSetWrapper {
 		if (obj == this) {
 			return true;
 		}
-		if (obj instanceof ReferenceBindingSetWrapper other) {
+		if (obj instanceof ReferenceBindingSetWrapper) {
+			ReferenceBindingSetWrapper other = (ReferenceBindingSetWrapper) obj;
 			return identityEqual(this.referenceBinding, other.referenceBinding);
 		}
 		return false;

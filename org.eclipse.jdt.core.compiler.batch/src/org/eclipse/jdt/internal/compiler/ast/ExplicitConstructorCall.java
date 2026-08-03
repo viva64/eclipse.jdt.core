@@ -129,8 +129,8 @@ public class ExplicitConstructorCall extends Statement implements Invocation {
 			for (Expression arg : this.arguments) {
 				if (arg.constant != Constant.NotAConstant)
 					continue;
-				if (arg instanceof SingleNameReference ref
-						&& ref.binding != null && ref.binding.isParameter())
+				if (arg instanceof SingleNameReference
+						&& ((SingleNameReference) arg).binding != null && ((SingleNameReference) arg).binding.isParameter())
 					continue;
 				return true;
 			}
@@ -382,7 +382,8 @@ public class ExplicitConstructorCall extends Statement implements Invocation {
 				}
 				if (!receiverType.isEnum() &&
 						this.accessMode <= ExplicitConstructorCall.Super &&
-						receiverType instanceof LocalTypeBinding local) { // local cannot be a record class
+						receiverType instanceof LocalTypeBinding) { // local cannot be a record class
+					LocalTypeBinding local = (LocalTypeBinding) receiverType;
 					MethodScope allocationStaticEnclosing = scope.parent.nearestEnclosingStaticScope(); // Constructor scope already has static, start from parent scope
 					MethodScope typesEnclosingStaticScope = local.scope.nearestEnclosingStaticScope();
 					if (allocationStaticEnclosing != null && typesEnclosingStaticScope != null && allocationStaticEnclosing != typesEnclosingStaticScope)

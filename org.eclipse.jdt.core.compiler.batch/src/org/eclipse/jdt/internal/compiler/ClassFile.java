@@ -2292,7 +2292,8 @@ public class ClassFile implements TypeConstants, TypeIds {
 						}
 					}
 				}
-			} else if (binding instanceof SyntheticMethodBinding syntheticMethod && syntheticMethod.isCanonicalConstructor()) {
+			} else if (binding instanceof SyntheticMethodBinding && ((SyntheticMethodBinding) binding).isCanonicalConstructor()) {
+				SyntheticMethodBinding syntheticMethod = (SyntheticMethodBinding) binding;
 				AbstractVariableDeclaration[] parameters = syntheticMethod.declaringClass.getRecordComponents();
 				completeArgumentAnnotationInfo(parameters, allTypeAnnotationContexts);
 			} else if (binding.sourceLambda() != null) { // SyntheticMethodBinding, purpose : LambdaMethod.
@@ -3509,7 +3510,8 @@ public class ClassFile implements TypeConstants, TypeIds {
 				localContentsOffset = addBootStrapTypeCaseConstantEntry(localContentsOffset, (LabelExpression) o, fPtr);
 			} else if (o instanceof TypeBinding) {
 				localContentsOffset = addClassDescBootstrap(localContentsOffset, (TypeBinding) o, fPtr);
-			} else if (o instanceof SingletonBootstrap sb) {
+			} else if (o instanceof SingletonBootstrap) {
+				SingletonBootstrap sb = (SingletonBootstrap) o;
 				localContentsOffset = addSingletonBootstrap(localContentsOffset, sb, fPtr);
 			}
 		}
@@ -3742,7 +3744,13 @@ public class ClassFile implements TypeConstants, TypeIds {
 		this.contents[localContentsOffset++] = (byte) (idx >> 8);
 		this.contents[localContentsOffset++] = (byte) idx;
 
-		String enumerator = caseConstant.expression instanceof QualifiedNameReference qnr ? new String(qnr.tokens[qnr.tokens.length - 1]) : caseConstant.expression.toString();
+		String enumerator;
+		if (caseConstant.expression instanceof QualifiedNameReference) {
+			char[][] tokens = ((QualifiedNameReference) caseConstant.expression).tokens;
+			enumerator = new String(tokens[tokens.length - 1]);
+		} else {
+			enumerator = caseConstant.expression.toString();
+		}
 		idx = this.constantPool.literalIndex(enumerator);
 		this.contents[localContentsOffset++] = (byte) (idx >> 8);
 		this.contents[localContentsOffset++] = (byte) idx;
@@ -3870,20 +3878,29 @@ public class ClassFile implements TypeConstants, TypeIds {
 				this.contents[localContentsOffset++] = (byte) intValIdx;
 			} else {
 				if (c.expression instanceof NullLiteral) continue;
-				int valIdx = switch (c.type.id) {
-					case TypeIds.T_boolean -> // Dynamic for Boolean.getStaticFinal(TRUE|FALSE) :
-						this.constantPool.literalIndexForDynamic(c.primitivesBootstrapIdx,
+				int valIdx;
+				switch (c.type.id) {
+					case TypeIds.T_boolean: // Dynamic for Boolean.getStaticFinal(TRUE|FALSE) :
+						valIdx = this.constantPool.literalIndexForDynamic(c.primitivesBootstrapIdx,
 								c.constant.booleanValue() ? BooleanConstant.TRUE_STRING : BooleanConstant.FALSE_STRING,
 								ConstantPool.JavaLangBooleanSignature);
-					case TypeIds.T_byte, TypeIds.T_char, TypeIds.T_short, TypeIds.T_int ->
-						this.constantPool.literalIndex(c.intValue());
-					case TypeIds.T_long ->
-						this.constantPool.literalIndex(c.constant.longValue());
-					case TypeIds.T_float ->
-						this.constantPool.literalIndex(c.constant.floatValue());
-					case TypeIds.T_double ->
-						this.constantPool.literalIndex(c.constant.doubleValue());
-					default ->
+						break;
+					case TypeIds.T_byte:
+					case TypeIds.T_char:
+					case TypeIds.T_short:
+					case TypeIds.T_int:
+						valIdx = this.constantPool.literalIndex(c.intValue());
+						break;
+					case TypeIds.T_long:
+						valIdx = this.constantPool.literalIndex(c.constant.longValue());
+						break;
+					case TypeIds.T_float:
+						valIdx = this.constantPool.literalIndex(c.constant.floatValue());
+						break;
+					case TypeIds.T_double:
+						valIdx = this.constantPool.literalIndex(c.constant.doubleValue());
+						break;
+					default:
 						throw new IllegalArgumentException("Switch has unexpected type: "+switchStatement); //$NON-NLS-1$
 				};
 				this.contents[localContentsOffset++] = (byte) (valIdx >> 8);
@@ -3924,7 +3941,13 @@ public class ClassFile implements TypeConstants, TypeIds {
 				this.contents[localContentsOffset++] = (byte) typeIndex;
 			} else {
 				if (c.expression instanceof NullLiteral) continue;
-				String enumerator = c.expression instanceof QualifiedNameReference qnr ? new String(qnr.tokens[qnr.tokens.length - 1]) : c.expression.toString();
+				String enumerator;
+				if (c.expression instanceof QualifiedNameReference) {
+					char[][] tokens = ((QualifiedNameReference) c.expression).tokens;
+					enumerator = new String(tokens[tokens.length - 1]);
+				} else {
+					enumerator = c.expression.toString();
+				}
 				int intValIdx = this.constantPool.literalIndex(enumerator);
 				this.contents[localContentsOffset++] = (byte) (intValIdx >> 8);
 				this.contents[localContentsOffset++] = (byte) intValIdx;
@@ -4092,7 +4115,9 @@ public class ClassFile implements TypeConstants, TypeIds {
 			LocalVariableBinding localVariable = this.codeStream.locals[i];
 			int initializationCount = localVariable.initializationCount;
 			if (initializationCount == 0) continue;
-			if (localVariable.declaration == null && !(localVariable.declaringScope != null && localVariable.declaringScope.referenceContext() instanceof ConstructorDeclaration cd && cd.isCompactConstructor())) continue;
+			if (localVariable.declaration == null && !(localVariable.declaringScope != null
+					&& localVariable.declaringScope.referenceContext() instanceof ConstructorDeclaration
+					&& ((ConstructorDeclaration) localVariable.declaringScope.referenceContext()).isCompactConstructor())) continue;
 			final TypeBinding localVariableTypeBinding = localVariable.type;
 			boolean isParameterizedType = localVariableTypeBinding.isParameterizedType() || localVariableTypeBinding.isTypeVariable();
 			if (isParameterizedType) {
@@ -4254,7 +4279,8 @@ public class ClassFile implements TypeConstants, TypeIds {
 			attributesNumber += generateSignatureAttribute(genericSignature);
 		}
 		AbstractMethodDeclaration methodDeclaration = methodBinding.sourceMethod();
-		if (methodBinding instanceof SyntheticMethodBinding syntheticMethod) {
+		if (methodBinding instanceof SyntheticMethodBinding) {
+			SyntheticMethodBinding syntheticMethod = (SyntheticMethodBinding) methodBinding;
 			if (syntheticMethod.purpose == SyntheticMethodBinding.BridgeMethod
 					|| (syntheticMethod.purpose == SyntheticMethodBinding.SuperMethodAccess
 							&& CharOperation.equals(syntheticMethod.selector, syntheticMethod.targetMethod.selector))) {
@@ -4990,7 +5016,8 @@ public class ClassFile implements TypeConstants, TypeIds {
 				for (int i = 0, max = targetParameters.length, argumentsLength = arguments != null ? arguments.length : 0; i < max; i++) {
 					if (argumentsLength > i && arguments[i] != null) {
 						AbstractVariableDeclaration argument = arguments[i];
-						int modifiers = argument.getBinding() instanceof VariableBinding variable ? variable.modifiers : ClassFileConstants.AccDefault;
+						Binding argumentBinding = argument.getBinding();
+						int modifiers = argumentBinding instanceof VariableBinding ? ((VariableBinding) argumentBinding).modifiers : ClassFileConstants.AccDefault;
 						if (binding.isCompactConstructor())
 							modifiers |= ClassFileConstants.AccMandated;
 						length = writeArgumentName(argument.name, modifiers, length);
@@ -5864,7 +5891,7 @@ public class ClassFile implements TypeConstants, TypeIds {
 					}
 				}
 			} else {
-				if (methodBinding instanceof SyntheticMethodBinding smb && smb.purpose == SyntheticMethodBinding.DeserializeLambda) {
+				if (methodBinding instanceof SyntheticMethodBinding && ((SyntheticMethodBinding) methodBinding).purpose == SyntheticMethodBinding.DeserializeLambda) {
 					// For the branching complexities in the generated $deserializeLambda$ we need the local variable
 					LocalVariableBinding lvb = new LocalVariableBinding(" synthetic0".toCharArray(), this.referenceBinding.scope.getJavaLangInvokeSerializedLambda(), 0, true); //$NON-NLS-1$
 					lvb.resolvedPosition = 0;

@@ -292,13 +292,15 @@ public class ElementsImpl9 extends ElementsImpl {
 	@Override
 	public TypeElement getEnumConstantBody(VariableElement enumConstant) {
 		switch(enumConstant.getKind()) {
-			case ENUM_CONSTANT -> {
+			case ENUM_CONSTANT: {
 				VariableElementImpl variableImpl = (VariableElementImpl) enumConstant;
-				if (variableImpl._binding instanceof FieldBinding field) {
+				if (variableImpl._binding instanceof FieldBinding) {
+					FieldBinding field = (FieldBinding) variableImpl._binding;
 					FieldDeclaration sourceField = field.sourceField();
 					if (sourceField == null)
 						return null;
-					if (sourceField.initialization instanceof QualifiedAllocationExpression qualAlloc) {
+					if (sourceField.initialization instanceof QualifiedAllocationExpression) {
+						QualifiedAllocationExpression qualAlloc = (QualifiedAllocationExpression) sourceField.initialization;
 						TypeDeclaration decl = qualAlloc.anonymousType;
 						if (decl == null)
 							return null;
@@ -316,8 +318,10 @@ public class ElementsImpl9 extends ElementsImpl {
 						return decl.binding == null ? null : (TypeElement) this._env.getFactory().newElement(decl.binding);
 					}
 				}
+				break;
 			}
-			default -> throw new IllegalArgumentException("Argument is not an enum constant");  //$NON-NLS-1$
+			default:
+				throw new IllegalArgumentException("Argument is not an enum constant");
 		}
 		return null;
 	}

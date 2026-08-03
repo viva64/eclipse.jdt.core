@@ -1550,14 +1550,14 @@ public abstract class Constant implements TypeIds, OperatorIds {
 		if (resolvedType.id == T_boolean)
 			return false;
 		switch (typeID()) {
-			case T_byte -> {
+			case T_byte: {
 				byte n = byteValue();
 				switch (resolvedType.id) {
 					case T_char: return n == (char)n;
 					default: return true;
 				}
 			}
-			case T_char -> {
+			case T_char: {
 				char n = charValue();
 				switch (resolvedType.id) {
 					case T_byte: return n == (byte)n;
@@ -1565,7 +1565,7 @@ public abstract class Constant implements TypeIds, OperatorIds {
 					default: return true;
 				}
 			}
-			case T_short -> {
+			case T_short: {
 				short n = shortValue();
 				switch (resolvedType.id) {
 					case T_byte: return n == (byte)n;
@@ -1573,7 +1573,7 @@ public abstract class Constant implements TypeIds, OperatorIds {
 					default: return true;
 				}
 			}
-			case T_int -> {
+			case T_int: {
 				int n = intValue();
 				switch (resolvedType.id) {
 					case T_byte: return n == (byte)n;
@@ -1583,7 +1583,7 @@ public abstract class Constant implements TypeIds, OperatorIds {
 					default: return true;
 				}
 			}
-			case T_long -> {
+			case T_long: {
 				long n = longValue();
 				switch (resolvedType.id) {
 					case T_byte: return n == (byte)n;
@@ -1594,8 +1594,9 @@ public abstract class Constant implements TypeIds, OperatorIds {
 					case T_long: return true;
 					case T_double: return n == (long)(double)n && n != Long.MAX_VALUE;
 				}
+				break;
 			}
-			case T_float -> {
+			case T_float: {
 				float n = floatValue();
 				switch (resolvedType.id) {
 					case T_byte: return n == (byte)n;
@@ -1606,7 +1607,7 @@ public abstract class Constant implements TypeIds, OperatorIds {
 					default: return true;
 				}
 			}
-			case T_double -> {
+			case T_double: {
 				double n = doubleValue();
 				switch (resolvedType.id) {
 					case T_byte: return n == (byte)n && !isNegativeZero(n);
@@ -1617,6 +1618,7 @@ public abstract class Constant implements TypeIds, OperatorIds {
 					case T_long: return n == (long)n && !isNegativeZero(n);
 					case T_double: return true;
 				}
+				break;
 			}
 		}
 		return false;

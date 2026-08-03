@@ -55,10 +55,10 @@ public class UnconditionalDualFlowInfo extends UnconditionalFlowInfo {
 		super.addInitializationsFrom(mainInits);
 		super.addNullInfoFrom(mainInits);
 		this.tagBits = mainInits.tagBits & UNREACHABLE;
-		while (!(mainInits instanceof UnconditionalFlowInfo ufi)) {
+		while (!(mainInits instanceof UnconditionalFlowInfo)) {
 			mainInits = mainInits.initsWhenTrue();
 		}
-		this.maxFieldCount = ufi.maxFieldCount;
+		this.maxFieldCount = ((UnconditionalFlowInfo) mainInits).maxFieldCount;
 		this.companionInits = companionInits;
 	}
 

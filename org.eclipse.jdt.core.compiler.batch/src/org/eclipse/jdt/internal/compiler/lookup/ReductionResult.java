@@ -64,10 +64,13 @@ public abstract class ReductionResult {
 	}
 
 	public static int inverse(int relation) {
-		return switch (relation) {
-			case SUPERTYPE -> SUBTYPE;
-			case SUBTYPE -> SUPERTYPE;
-			default -> relation;
-		};
+		switch (relation) {
+			case SUPERTYPE:
+				return SUBTYPE;
+			case SUBTYPE:
+				return SUPERTYPE;
+			default:
+				return relation;
+		}
 	}
 }

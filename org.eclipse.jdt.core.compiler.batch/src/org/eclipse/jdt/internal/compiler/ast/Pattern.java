@@ -59,7 +59,29 @@ public abstract class Pattern extends Expression {
 
 	private boolean previewReported;
 
-	record TestContextRecord(TypeBinding left, TypeBinding right, PrimitiveConversionRoute route) {}
+	static final class TestContextRecord {
+		private final TypeBinding left;
+		private final TypeBinding right;
+		private final PrimitiveConversionRoute route;
+
+		TestContextRecord(TypeBinding left, TypeBinding right, PrimitiveConversionRoute route) {
+			this.left = left;
+			this.right = right;
+			this.route = route;
+		}
+
+		public TypeBinding left() {
+			return this.left;
+		}
+
+		public TypeBinding right() {
+			return this.right;
+		}
+
+		public PrimitiveConversionRoute route() {
+			return this.route;
+		}
+	}
 
 	public RecordPattern getEnclosingPattern() {
 		return this.enclosingPattern;
@@ -116,8 +138,10 @@ public abstract class Pattern extends Expression {
 	public boolean coversValue(Constant cst, BlockScope scope) {
 		if (!isUnguarded())
 			return false;
-		if (!(this.resolvedType.unboxedType() instanceof BaseTypeBinding baseType))
+		TypeBinding unboxedType = this.resolvedType.unboxedType();
+		if (!(unboxedType instanceof BaseTypeBinding))
 			return false;
+		BaseTypeBinding baseType = (BaseTypeBinding) unboxedType;
 		if (!cst.isExactTestingConversion(baseType))
 			return false;
 		int constantTypeID = cst.typeID();
@@ -216,17 +240,36 @@ public abstract class Pattern extends Expression {
 	public static boolean isBoxing(TypeBinding provided, TypeBinding expected) {
 
 		if (expected.isBaseType() && !provided.isBaseType()) {
-			int expectedId = switch(expected.id) {
-				case T_char     -> T_JavaLangCharacter;
-				case T_byte     -> T_JavaLangByte;
-				case T_short    -> T_JavaLangShort;
-				case T_boolean  -> T_JavaLangBoolean;
-				case T_long     -> T_JavaLangLong;
-				case T_double   -> T_JavaLangDouble;
-				case T_float    -> T_JavaLangFloat;
-				case T_int      -> T_JavaLangInteger;
-				default -> -1;
-			};
+			int expectedId;
+			switch (expected.id) {
+				case T_char:
+					expectedId = T_JavaLangCharacter;
+					break;
+				case T_byte:
+					expectedId = T_JavaLangByte;
+					break;
+				case T_short:
+					expectedId = T_JavaLangShort;
+					break;
+				case T_boolean:
+					expectedId = T_JavaLangBoolean;
+					break;
+				case T_long:
+					expectedId = T_JavaLangLong;
+					break;
+				case T_double:
+					expectedId = T_JavaLangDouble;
+					break;
+				case T_float:
+					expectedId = T_JavaLangFloat;
+					break;
+				case T_int:
+					expectedId = T_JavaLangInteger;
+					break;
+				default:
+					expectedId = -1;
+					break;
+			}
 			return provided.id == expectedId;
 		}
 		return false;
@@ -240,7 +283,8 @@ public abstract class Pattern extends Expression {
 		boolean expressionIsBaseType = expressionType.isBaseType();
 		reporting: if ((expressionIsBaseType || destinationIsBaseType) &&
 				(expressionType.id != TypeIds.T_int || destinationType.id != TypeIds.T_int)) {
-			if (location instanceof Pattern pattern) {
+			if (location instanceof Pattern) {
+				Pattern pattern = (Pattern) location;
 				if (pattern.previewReported)
 					break reporting;
 				pattern.previewReported = true;

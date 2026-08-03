@@ -18,7 +18,17 @@ import java.util.Arrays;
 /**
  * Wrapper around char[][] that can be used as a key in a Map or Set.
  */
-public final record CharCharArray(char[][] key) implements Comparable<CharCharArray> {
+public final class CharCharArray implements Comparable<CharCharArray> {
+
+	private final char[][] key;
+
+	public CharCharArray(char[][] key) {
+		this.key = key;
+	}
+
+	public char[][] key() {
+		return this.key;
+	}
 
 	@Override
 	public int compareTo(CharCharArray other) {
@@ -43,7 +53,8 @@ public final record CharCharArray(char[][] key) implements Comparable<CharCharAr
 
 	@Override
 	public boolean equals(Object obj) {
-		if (obj instanceof CharCharArray other) {
+		if (obj instanceof CharCharArray) {
+			CharCharArray other = (CharCharArray) obj;
 			return Arrays.deepEquals(this.key, other.key);
 		}
 		return false;

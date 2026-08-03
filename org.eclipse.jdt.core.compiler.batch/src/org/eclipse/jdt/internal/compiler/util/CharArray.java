@@ -22,7 +22,17 @@ import java.util.Arrays;
  * <code>Arrays.hashCode</code> and <code>Arrays.equals</code>.
  * </p>
  */
-public final record CharArray(char[] key) implements Comparable<CharArray> {
+public final class CharArray implements Comparable<CharArray> {
+
+	private final char[] key;
+
+	public CharArray(char[] key) {
+		this.key = key;
+	}
+
+	public char[] key() {
+		return this.key;
+	}
 
 	@Override
 	public int compareTo(CharArray o) {
@@ -36,7 +46,8 @@ public final record CharArray(char[] key) implements Comparable<CharArray> {
 
 	@Override
 	public boolean equals(Object obj) {
-		if (obj instanceof CharArray other) {
+		if (obj instanceof CharArray) {
+			CharArray other = (CharArray) obj;
 			return Arrays.equals(this.key, other.key);
 		}
 		return false;

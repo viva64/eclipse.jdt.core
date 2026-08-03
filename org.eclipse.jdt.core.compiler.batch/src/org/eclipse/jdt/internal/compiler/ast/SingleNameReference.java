@@ -983,7 +983,8 @@ public TypeBinding reportError(BlockScope scope) {
 		scope.problemReporter().invalidField(this, (FieldBinding) this.binding);
 	} else if (this.binding instanceof ProblemReferenceBinding || this.binding instanceof MissingTypeBinding) {
 		scope.problemReporter().invalidType(this, (TypeBinding) this.binding);
-	} else if (this.binding instanceof ProblemLocalVariableBinding plvb && plvb.problemId() == ProblemReasons.NonStaticReferenceInStaticContext) {
+	} else if (this.binding instanceof ProblemLocalVariableBinding && ((ProblemLocalVariableBinding) this.binding).problemId() == ProblemReasons.NonStaticReferenceInStaticContext) {
+		ProblemLocalVariableBinding plvb = (ProblemLocalVariableBinding) this.binding;
 		scope.problemReporter().recordStaticReferenceToOuterLocalVariable(plvb.closestMatch, this);
 	} else {
 		scope.problemReporter().unresolvableReference(this, this.binding);
@@ -1005,9 +1006,11 @@ public TypeBinding resolveType(BlockScope scope) {
 		switch (this.bits & ASTNode.RestrictiveFlagMASK) {
 			case Binding.VARIABLE : // =========only variable============
 			case Binding.VARIABLE | Binding.TYPE : //====both variable and type============
-				if (this.binding instanceof VariableBinding variable) {
+				if (this.binding instanceof VariableBinding) {
+					VariableBinding variable = (VariableBinding) this.binding;
 					TypeBinding variableType;
-					if (this.binding instanceof LocalVariableBinding localVariable) {
+					if (this.binding instanceof LocalVariableBinding) {
+						LocalVariableBinding localVariable = (LocalVariableBinding) this.binding;
 						this.bits &= ~ASTNode.RestrictiveFlagMASK;  // clear bits
 						this.bits |= Binding.LOCAL;
 						if (localVariable.useFlag == LocalVariableBinding.ILLEGAL_SELF_REFERENCE_IF_USED) {

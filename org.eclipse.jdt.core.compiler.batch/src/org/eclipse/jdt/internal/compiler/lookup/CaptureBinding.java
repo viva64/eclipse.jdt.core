@@ -258,7 +258,8 @@ public class CaptureBinding extends TypeVariableBinding {
 					ReferenceBinding[] interfaces = new ReferenceBinding[fullGlb.length];
 					int j=0;
 					for (int i=0; i < fullGlb.length; i++) {
-						if (fullGlb[i] instanceof ReferenceBinding ref) {
+						if (fullGlb[i] instanceof ReferenceBinding) {
+							ReferenceBinding ref = (ReferenceBinding) fullGlb[i];
 							if (ref.isInterface())
 								interfaces[j++] = ref;
 							else

@@ -333,9 +333,9 @@ public boolean canBeSeenBy(ReferenceBinding receiverType, ReferenceBinding invoc
 		// JLS 6.6-5: A private class member or constructor is accessible only within the body of the top level
 		// class (§7.6) that encloses the declaration of the member or constructor => we should forbid access from top level class `header`.
 		ReferenceBinding topLevelType = invocationType.outermostEnclosingType();
-		if (topLevelType instanceof SourceTypeBinding sourceType
-				&& sourceType.scope != null
-				&& sourceType.scope.referenceContext.staticInitializerScope.insideTypeDeclarationAnnotations)
+		if (topLevelType instanceof SourceTypeBinding
+				&& ((SourceTypeBinding) topLevelType).scope != null
+				&& ((SourceTypeBinding) topLevelType).scope.referenceContext.staticInitializerScope.insideTypeDeclarationAnnotations)
 			return false;
 	}
 
@@ -1441,10 +1441,14 @@ public boolean isRecord() {
 }
 
 private static SourceTypeBinding getSourceTypeBinding(ReferenceBinding ref) {
-	if (ref instanceof SourceTypeBinding stb)
+	if (ref instanceof SourceTypeBinding) {
+		SourceTypeBinding stb = (SourceTypeBinding) ref;
 		return stb;
-	if (ref instanceof ParameterizedTypeBinding ptb)
-		return ptb.type instanceof SourceTypeBinding stb ? stb : null;
+	}
+	if (ref instanceof ParameterizedTypeBinding) {
+		ParameterizedTypeBinding ptb = (ParameterizedTypeBinding) ref;
+		return ptb.type instanceof SourceTypeBinding ? (SourceTypeBinding) ptb.type : null;
+	}
 	return null;
 }
 

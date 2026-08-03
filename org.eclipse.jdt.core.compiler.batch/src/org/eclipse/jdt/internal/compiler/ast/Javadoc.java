@@ -595,7 +595,7 @@ public class Javadoc extends ASTNode {
 						};
 		Function<AbstractVariableDeclaration, Binding>  resolveArgumentOrComponent =
 						(arg) -> {
-							return arg instanceof Argument argument ? argument.binding : scope.findVariable(arg.name);
+							return arg instanceof Argument ? ((Argument) arg).binding : scope.findVariable(arg.name);
 						};
 		resolveParamTags(scope,
 				reportMissing,
@@ -633,7 +633,8 @@ public class Javadoc extends ASTNode {
 				JavadocSingleNameReference param = this.paramReferences[i];
 
 				Binding lBinding = resolveNameRef.apply(param);
-				if (lBinding instanceof VariableBinding varBinding) {
+				if (lBinding instanceof VariableBinding) {
+					VariableBinding varBinding = (VariableBinding) lBinding;
 					// Verify duplicated tags
 					boolean found = false;
 					for (int j = 0; j < maxBindings && !found; j++) {
@@ -653,7 +654,8 @@ public class Javadoc extends ASTNode {
 				for (int i = 0; i < argumentsSize; i++) {
 					AbstractVariableDeclaration arg = arguments[i];
 					Binding lBinding = resolveArgumentOrComponent.apply(arg);
-					if (lBinding instanceof VariableBinding argBinding) {
+					if (lBinding instanceof VariableBinding) {
+						VariableBinding argBinding = (VariableBinding) lBinding;
 						boolean found = false;
 						for (int j = 0; j < maxBindings; j++) {
 							VariableBinding binding = bindings[j];

@@ -17,6 +17,7 @@ package org.eclipse.jdt.internal.compiler.apt.model;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 import javax.lang.model.type.IntersectionType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
@@ -39,7 +40,7 @@ public class IntersectionTypeImpl extends TypeMirrorImpl implements Intersection
         }
 		this.bounds = superTypes.stream()
                 .map(referenceBinding -> this._env.getFactory().newTypeMirror(referenceBinding))
-                .toList();
+                .collect(Collectors.toList());
 	}
 
 	/* (non-Javadoc)

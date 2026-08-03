@@ -599,7 +599,8 @@ public abstract class ASTNode implements Location, TypeConstants, TypeIds {
 			// ignore cases where type is used from inside itself
 			((ReferenceBinding)refType.erasure()).modifiers |= ExtraCompilerModifiers.AccLocallyUsed;
 		}
-		if (type instanceof BinaryTypeBinding btb) {
+		if (type instanceof BinaryTypeBinding) {
+			BinaryTypeBinding btb = (BinaryTypeBinding) type;
 			reportPreviewAPI(scope, btb.binaryPreviewAnnotation);
 		}
 		if (refType.hasRestrictedAccess()) {
@@ -983,15 +984,19 @@ public abstract class ASTNode implements Location, TypeConstants, TypeIds {
 	private static void tagMissingAnalysisAnnotation(Scope scope, Binding recipient, Annotation annotation) {
 		long extendedTagBits = scope.environment().checkForMissingAnalysisAnnotation(annotation.resolvedType);
 		if (extendedTagBits != 0) {
-			if (recipient instanceof MethodBinding method) {
+			if (recipient instanceof MethodBinding) {
+				MethodBinding method = (MethodBinding) recipient;
 				method.extendedTagBits |= extendedTagBits;
-			} else if (recipient instanceof VariableBinding variable) {
+			} else if (recipient instanceof VariableBinding) {
+				VariableBinding variable = (VariableBinding) recipient;
 				if (extendedTagBits == ExtendedTagBits.HasMissingOwningAnnotation
-						&& scope instanceof MethodScope methodScope
+						&& scope instanceof MethodScope
 						&& variable.isParameter()
-						&& variable instanceof LocalVariableBinding local
-						&& local.declaration instanceof Argument arg)
+						&& variable instanceof LocalVariableBinding
+						&& ((LocalVariableBinding) variable).declaration instanceof Argument)
 				{
+					Argument arg = (Argument) ((LocalVariableBinding) variable).declaration;
+					MethodScope methodScope = (MethodScope) scope;
 					Argument[] arguments = methodScope.referenceMethod().arguments;
 					for (int j=0;j < arguments.length;j++){
 						if (arguments[j] == arg) {
@@ -999,7 +1004,8 @@ public abstract class ASTNode implements Location, TypeConstants, TypeIds {
 							break;
 						}
 					}
-				} else if (variable instanceof FieldBinding field) {
+				} else if (variable instanceof FieldBinding) {
+					FieldBinding field = (FieldBinding) variable;
 					field.extendedTagBits |= extendedTagBits;
 				}
 			}

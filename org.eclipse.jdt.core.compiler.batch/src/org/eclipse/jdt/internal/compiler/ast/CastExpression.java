@@ -182,7 +182,8 @@ public static void checkNeedForArgumentCasts(BlockScope scope, Expression receiv
 	TypeBinding[] rawArgumentTypes = argumentTypes;
 	for (int i = 0; i < length; i++) {
 		Expression argument = arguments[i];
-		if (argument instanceof CastExpression castExpression) {
+		if (argument instanceof CastExpression) {
+			CastExpression castExpression = (CastExpression) argument;
 			// narrowing conversion on base type may change value, thus necessary
 			if ((argument.bits & ASTNode.UnnecessaryCast) == 0 && argument.resolvedType.isBaseType()) {
 				continue;
@@ -325,7 +326,7 @@ private static void checkAlternateBinding(BlockScope scope, Expression receiver,
 				int argc = arguments == null ? 0 : arguments.length;
 				Expression [] newArguments = new Expression[argc];
 				for (int i = 0; i < argc; i++)
-					newArguments[i] = arguments[i] instanceof CastExpression castExpression ? castExpression.expression : arguments[i];
+					newArguments[i] = arguments[i] instanceof CastExpression ? ((CastExpression) arguments[i]).expression : arguments[i];
 				fic.invocationArguments = newArguments;
 				return fic;
 			}
@@ -724,7 +725,7 @@ public void setExpectedType(TypeBinding expectedType) {
 private boolean isIndirectlyUsed() {
 	if (this.expression instanceof MessageSend) {
 		MethodBinding method = ((MessageSend)this.expression).binding;
-		if (method instanceof ParameterizedGenericMethodBinding pgmb && pgmb.wasInferred) {
+		if (method instanceof ParameterizedGenericMethodBinding && ((ParameterizedGenericMethodBinding) method).wasInferred) {
 			if (this.expectedType == null)
 				return true;
 			if (!method.original().returnType.isCompatibleWith(this.expectedType))

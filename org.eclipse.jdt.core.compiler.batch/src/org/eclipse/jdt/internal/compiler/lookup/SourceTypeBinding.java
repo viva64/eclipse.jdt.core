@@ -948,9 +948,11 @@ private VariableBinding resolveTypeFor(VariableBinding variable) {
 		: this.scope.referenceContext.initializerScope;
 	FieldBinding previousField = initializationScope.initializedField;
 	try {
-		if (variable instanceof FieldBinding field)
+		if (variable instanceof FieldBinding) {
+			FieldBinding field = (FieldBinding) variable;
 			initializationScope.initializedField = field;
-		AbstractVariableDeclaration variableDeclaration = variable instanceof FieldBinding field ? field.sourceField() : ((RecordComponentBinding) variable).sourceRecordComponent();
+		}
+		AbstractVariableDeclaration variableDeclaration = variable instanceof FieldBinding ? ((FieldBinding) variable).sourceField() : ((RecordComponentBinding) variable).sourceRecordComponent();
 		ASTNode.resolveNullDefaultAnnotations(initializationScope, variableDeclaration.annotations, variable);
 		TypeBinding variableType =
 			variableDeclaration.getKind() == AbstractVariableDeclaration.ENUM_CONSTANT
@@ -987,7 +989,8 @@ private VariableBinding resolveTypeFor(VariableBinding variable) {
 
 		Annotation [] annotations = variableDeclaration.annotations;
 
-		if (variableDeclaration instanceof RecordComponent componentDeclaration) {
+		if (variableDeclaration instanceof RecordComponent) {
+			RecordComponent componentDeclaration = (RecordComponent) variableDeclaration;
 			if ((variable.modifiers & ExtraCompilerModifiers.AccJustFlag) != 0)
 				this.scope.problemReporter().recordComponentsCannotHaveModifiers(componentDeclaration);
 			if (TypeDeclaration.disallowedComponentNames.contains(new String(componentDeclaration.name))) {
@@ -1033,10 +1036,14 @@ private VariableBinding resolveTypeFor(VariableBinding variable) {
 	    initializationScope.initializedField = previousField;
 	}
 	if (this.externalAnnotationProvider != null) {
-		if (variable instanceof FieldBinding field)
+		if (variable instanceof FieldBinding) {
+			FieldBinding field = (FieldBinding) variable;
 			ExternalAnnotationSuperimposer.annotateFieldBinding(field, this.externalAnnotationProvider, this.environment);
-		else if (variable instanceof RecordComponentBinding component)
+		}
+		else if (variable instanceof RecordComponentBinding) {
+			RecordComponentBinding component = (RecordComponentBinding) variable;
 			ExternalAnnotationSuperimposer.annotateComponentBinding(component, this.externalAnnotationProvider, this.environment);
+		}
 	}
 	return variable;
 }

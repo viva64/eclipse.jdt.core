@@ -2236,10 +2236,12 @@ public void generateOuterAccess(Object[] mappingSequence, ASTNode invocationSite
 		fieldAccess(Opcodes.OPC_getfield, fieldBinding, null /* default declaringClass */);
 	} else {
 		LocalVariableBinding localBinding = (LocalVariableBinding) mappingSequence[0];
-		if (localBinding instanceof SyntheticArgumentBinding synth && synth.accessingScope != null) {
+		if (localBinding instanceof SyntheticArgumentBinding && ((SyntheticArgumentBinding) localBinding).accessingScope != null) {
+			SyntheticArgumentBinding synth = (SyntheticArgumentBinding) localBinding;
 			if (!isOuterLocalInInstanceScope(scope, synth.accessingScope)) {
-				if (invocationSite instanceof AllocationExpression alloc
-						&& alloc.resolvedType instanceof LocalTypeBinding localType && !localType.isRecord()) {
+				if (invocationSite instanceof AllocationExpression
+						&& ((AllocationExpression) invocationSite).resolvedType instanceof LocalTypeBinding && !((LocalTypeBinding) ((AllocationExpression) invocationSite).resolvedType).isRecord()) {
+					LocalTypeBinding localType = (LocalTypeBinding) ((AllocationExpression) invocationSite).resolvedType;
 					scope.problemReporter().allocationInStaticContext(invocationSite, localType);
 					return;
 				} else {
@@ -2265,11 +2267,13 @@ private boolean isOuterLocalInInstanceScope(Scope scope, Scope accessingScope) {
 	while (current != null) {
 		if (current == accessingScope)
 			return true;
-		if (current instanceof MethodScope ms && !ms.isConstructorCall && ms.isStatic) {
+		if (current instanceof MethodScope && !((MethodScope) current).isConstructorCall && ((MethodScope) current).isStatic) {
 			return false;
-		} else if (current instanceof ClassScope cs) {
+		} else if (current instanceof ClassScope) {
+			ClassScope cs = (ClassScope) current;
 			SourceTypeBinding binding = cs.referenceContext.binding;
-			if (binding.superclass instanceof LocalTypeBinding superLocal) {
+			if (binding.superclass instanceof LocalTypeBinding) {
+				LocalTypeBinding superLocal = (LocalTypeBinding) binding.superclass;
 				if (isOuterLocalInInstanceScope(superLocal.scope, accessingScope))
 					return true;
 			}

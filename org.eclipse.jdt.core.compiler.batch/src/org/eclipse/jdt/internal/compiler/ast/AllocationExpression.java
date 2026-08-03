@@ -361,7 +361,8 @@ public TypeBinding resolveType(BlockScope scope) {
 		} else {
 			this.resolvedType = this.type.resolveType(scope, true /* check bounds*/);
 		}
-		if (this.resolvedType instanceof LocalTypeBinding local && !local.isRecord() && this.enumConstant == null) { // local records are implicitly static and don't have enclosing instance
+		if (this.resolvedType instanceof LocalTypeBinding && !((LocalTypeBinding) this.resolvedType).isRecord() && this.enumConstant == null) {
+			LocalTypeBinding local = (LocalTypeBinding) this.resolvedType; // local records are implicitly static and don't have enclosing instance
 			MethodScope allocationStaticEnclosing = scope.nearestEnclosingStaticScope();
 			if (allocationStaticEnclosing != null && allocationStaticEnclosing != local.scope.nearestEnclosingStaticScope())
 				scope.problemReporter().allocationInStaticContext(this, local);
@@ -547,7 +548,8 @@ public TypeBinding resolveType(BlockScope scope) {
 
 protected void checkEarlyConstructionContext(BlockScope scope) {
 	if (JavaFeature.FLEXIBLE_CONSTRUCTOR_BODIES.isSupported(scope.compilerOptions())
-			&& this.type != null && this.type.resolvedType instanceof ReferenceBinding currentType) {
+			&& this.type != null && this.type.resolvedType instanceof ReferenceBinding) {
+		ReferenceBinding currentType = (ReferenceBinding) this.type.resolvedType;
 		// only enclosing types of non-static member types are relevant
 		if (currentType.isStatic() || currentType.isLocalType())
 			return;
@@ -657,8 +659,10 @@ public static MethodBinding inferDiamondConstructor(Scope scope, InvocationSite 
 		if (site.invocationTargetType() == null && site.getExpressionContext().definesTargetType() && factory instanceof PolyParameterizedGenericMethodBinding)
 			return factory; // during applicability inference keep the PolyParameterizedGenericMethodBinding
 		ParameterizedGenericMethodBinding genericFactory = (ParameterizedGenericMethodBinding) factory;
-		if (site instanceof AllocationExpression allocation)
+		if (site instanceof AllocationExpression) {
+			AllocationExpression allocation = (AllocationExpression) site;
 			allocation.wasInferred = genericFactory.wasInferred;
+		}
 		SyntheticFactoryMethodBinding sfmb = (SyntheticFactoryMethodBinding) factory.original();
 		TypeVariableBinding[] constructorTypeVariables = sfmb.getConstructor().typeVariables();
 		TypeBinding [] constructorTypeArguments = constructorTypeVariables != null ? new TypeBinding[constructorTypeVariables.length] : Binding.NO_TYPES;

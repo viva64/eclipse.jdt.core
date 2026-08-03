@@ -268,8 +268,10 @@ public class ImplicitNullAnnotationVerifier {
 		boolean shouldInherit = this.inheritNullAnnotations;
 
 		SyntheticMethodBinding currentRecordAccessor = null;
-		if (currentMethod instanceof SyntheticMethodBinding synth && synth.purpose == SyntheticMethodBinding.RecordComponentReadAccess)
+		if (currentMethod instanceof SyntheticMethodBinding && ((SyntheticMethodBinding) currentMethod).purpose == SyntheticMethodBinding.RecordComponentReadAccess) {
+			SyntheticMethodBinding synth = (SyntheticMethodBinding) currentMethod;
 			currentRecordAccessor = synth;
+		}
 
 		// return type:
 		returnType: {
@@ -524,7 +526,8 @@ public class ImplicitNullAnnotationVerifier {
 		if (useTypeAnnotations) {
 			if (method.returnType == null)
 				return 0L;
-			if (method instanceof SyntheticMethodBinding synth && synth.purpose == SyntheticMethodBinding.RecordComponentReadAccess) {
+			if (method instanceof SyntheticMethodBinding && ((SyntheticMethodBinding) method).purpose == SyntheticMethodBinding.RecordComponentReadAccess) {
+				SyntheticMethodBinding synth = (SyntheticMethodBinding) method;
 				// record components apply @NNBD already during SBT.resolveTypeFor(FieldBinding)
 				// so we need to dig deeper to find the explicit type before application of a default:
 				Binding explicitType = synth.recordComponentBinding.explicitType;

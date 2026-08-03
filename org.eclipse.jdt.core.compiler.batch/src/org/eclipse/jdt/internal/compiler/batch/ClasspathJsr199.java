@@ -188,7 +188,8 @@ public class ClasspathJsr199 extends ClasspathLocation {
 	public void initialize() throws IOException {
 		if (this.jrt != null) {
 			this.jrt.initialize();
-		} else if (this.location instanceof LocationWrapper wrapper) {
+		} else if (this.location instanceof LocationWrapper) {
+			LocationWrapper wrapper = (LocationWrapper) this.location;
 			for (Path locPath : wrapper.getPaths()) {
 				File file = locPath.toFile();
 				IModule mod = ModuleFinder.scanForModule(this, file, null, true, null);

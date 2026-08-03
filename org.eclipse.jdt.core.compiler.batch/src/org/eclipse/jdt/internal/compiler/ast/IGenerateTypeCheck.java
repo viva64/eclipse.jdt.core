@@ -27,37 +27,43 @@ interface IGenerateTypeCheck {
 
 	default void generateTypeCheck(TypeBinding providedType, TypeReference expectedTypeRef, BlockScope scope, CodeStream codeStream, PrimitiveConversionRoute route) {
 		switch (route) {
-			case IDENTITY_CONVERSION -> {
+			case IDENTITY_CONVERSION: {
 				consumeProvidedValue(providedType, codeStream);
 				codeStream.iconst_1();
 				setPatternIsTotalType();
+				break;
 			}
-			case WIDENING_PRIMITIVE_CONVERSION,
-			NARROWING_PRIMITVE_CONVERSION,
-			WIDENING_AND_NARROWING_PRIMITIVE_CONVERSION -> {
+			case WIDENING_PRIMITIVE_CONVERSION:
+			case NARROWING_PRIMITVE_CONVERSION:
+			case WIDENING_AND_NARROWING_PRIMITIVE_CONVERSION: {
 				generateExactConversions(providedType, expectedTypeRef.resolvedType, scope, codeStream);
 				setPatternIsTotalType();
+				break;
 			}
-			case BOXING_CONVERSION,
-			BOXING_CONVERSION_AND_WIDENING_REFERENCE_CONVERSION -> {
+			case BOXING_CONVERSION:
+			case BOXING_CONVERSION_AND_WIDENING_REFERENCE_CONVERSION: {
 				consumeProvidedValue(providedType, codeStream);
 				codeStream.iconst_1();
 				setPatternIsTotalType();
+				break;
 			}
-			case WIDENING_REFERENCE_AND_UNBOXING_COVERSION,
-			WIDENING_REFERENCE_AND_UNBOXING_COVERSION_AND_WIDENING_PRIMITIVE_CONVERSION -> {
+			case WIDENING_REFERENCE_AND_UNBOXING_COVERSION:
+			case WIDENING_REFERENCE_AND_UNBOXING_COVERSION_AND_WIDENING_PRIMITIVE_CONVERSION: {
 				codeStream.instance_of(scope.getJavaLangObject());
 				setPatternIsTotalType();
+				break;
 			}
-			case NARROWING_AND_UNBOXING_CONVERSION -> {
+			case NARROWING_AND_UNBOXING_CONVERSION: {
 				TypeBinding boxType = scope.environment().computeBoxingType(expectedTypeRef.resolvedType);
 				codeStream.instance_of(expectedTypeRef, boxType);
+				break;
 			}
-			case UNBOXING_CONVERSION -> {
+			case UNBOXING_CONVERSION: {
 				codeStream.instance_of(scope.getJavaLangObject());
 				setPatternIsTotalType();
+				break;
 			}
-			case UNBOXING_AND_WIDENING_PRIMITIVE_CONVERSION -> {
+			case UNBOXING_AND_WIDENING_PRIMITIVE_CONVERSION: {
 				codeStream.dup();
 				codeStream.instance_of(providedType);
 				BranchLabel iLabel = new BranchLabel(codeStream);
@@ -84,8 +90,9 @@ interface IGenerateTypeCheck {
 				codeStream.goto_(postCheck);
 				postCheck.place();
 				setPatternIsTotalType();
+				break;
 			}
-			case NO_CONVERSION_ROUTE -> {
+			case NO_CONVERSION_ROUTE: {
 				if (isUnnamed() && expectedTypeRef == null) { // for a type elided unnamed pattern, there is no need for a type check.
 					consumeProvidedValue(providedType, codeStream);
 					codeStream.iconst_1();
@@ -94,7 +101,7 @@ interface IGenerateTypeCheck {
 				}
 				break;
 			}
-			default -> {
+			default: {
 				throw new IllegalArgumentException("Unexpected conversion route "+route); //$NON-NLS-1$
 			}
 		}

@@ -146,7 +146,8 @@ public class RecordPattern extends Pattern {
 		for (int i = 0; i < components.length; i++) {
 			Pattern p1 = this.patterns[i];
 			RecordComponentBinding componentBinding = components[i];
-			if (p1 instanceof TypePattern tp) {
+			if (p1 instanceof TypePattern) {
+				TypePattern tp = (TypePattern) p1;
 				if (tp.getType() == null || tp.getType().isTypeNameVar(scope)) {
 					if (tp.local.binding != null) // rewrite with the inferred type
 						tp.local.binding.type = componentBinding.type;
@@ -289,7 +290,8 @@ public class RecordPattern extends Pattern {
 	}
 
 	private void checkForPrimitiveType(BlockScope currentScope, Pattern p, TypeBinding componentType) {
-		if (p.isTotalTypeNode && !componentType.isPrimitiveType() &&  p instanceof TypePattern tp) {
+		if (p.isTotalTypeNode && !componentType.isPrimitiveType() &&  p instanceof TypePattern) {
+			TypePattern tp = (TypePattern) p;
 			TypeBinding providedType = tp.resolvedType;
 			if (providedType != null && providedType.isPrimitiveType()) {
 				PrimitiveConversionRoute route = findPrimitiveConversionRoute(componentType, providedType, currentScope);

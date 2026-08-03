@@ -857,9 +857,11 @@ private void internalAnalyseCode(FlowContext flowContext, FlowInfo flowInfo) {
 	}
 	if (this.methods != null) {
 		UnconditionalFlowInfo outerInfo = flowInfo.unconditionalFieldLessCopy();
-		if (nonStaticFieldInfo instanceof UnconditionalDualFlowInfo udfi) {
+		if (nonStaticFieldInfo instanceof UnconditionalDualFlowInfo) {
+			UnconditionalDualFlowInfo udfi = (UnconditionalDualFlowInfo) nonStaticFieldInfo;
 			nonStaticFieldInfo = udfi.getMainInits(); // drop info from prologues
-		} else if (nonStaticFieldInfo instanceof DualFlowInfo dfi) {
+		} else if (nonStaticFieldInfo instanceof DualFlowInfo) {
+			DualFlowInfo dfi = (DualFlowInfo) nonStaticFieldInfo;
 			nonStaticFieldInfo = dfi.initsWhenTrue;
 		}
 		FlowInfo constructorInfo = nonStaticFieldInfo.unconditionalInits().discardNonFieldInitializations().addInitializationsFrom(outerInfo);
@@ -1509,12 +1511,12 @@ private void checkMemberOfDeprecated(SourceTypeBinding declaringType, Binding me
 	if (declaringType.isAnnotationType())
 		return; // don't suggest to deprecate annotation attributes
 
-	if (memberBinding instanceof MethodBinding method && method.isPrivate()) return;
-	else if (memberBinding instanceof FieldBinding field && field.isPrivate()) return;
-	else if (memberBinding instanceof ReferenceBinding type && type.isPrivate()) return;
+	if (memberBinding instanceof MethodBinding && ((MethodBinding) memberBinding).isPrivate()) return;
+	else if (memberBinding instanceof FieldBinding && ((FieldBinding) memberBinding).isPrivate()) return;
+	else if (memberBinding instanceof ReferenceBinding && ((ReferenceBinding) memberBinding).isPrivate()) return;
 
 	if (memberBinding != null && memberBinding.isValidBinding() && (memberBinding.tagBits & TagBits.HasMissingType) == 0) {
-		if (memberDeclaration instanceof ConstructorDeclaration ctor && ctor.isDefaultConstructor())
+		if (memberDeclaration instanceof ConstructorDeclaration && ((ConstructorDeclaration) memberDeclaration).isDefaultConstructor())
 			return;
 		if ((memberBinding.tagBits & TagBits.AnnotationDeprecated) == 0)
 			this.scope.problemReporter().memberOfDeprecatedTypeNotDeprecated(memberDeclaration, declaringType);
@@ -1839,7 +1841,8 @@ private final void updateNestRelations() {
 		switch (skope.kind) {
 			case Scope.METHOD_SCOPE :
 				ReferenceContext context = ((MethodScope) skope).referenceContext;
-				if (context instanceof LambdaExpression lambdaExpression) {
+				if (context instanceof LambdaExpression) {
+					LambdaExpression lambdaExpression = (LambdaExpression) context;
 					if (lambdaExpression != lambdaExpression.original) // transient unreal universe.
 						concreteType = false;
 				}

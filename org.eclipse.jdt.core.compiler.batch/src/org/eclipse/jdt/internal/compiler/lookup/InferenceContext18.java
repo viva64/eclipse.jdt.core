@@ -466,7 +466,9 @@ public class InferenceContext18 {
 				}
 				for (ConstraintFormula constraint : bottomSet) {
 					// https://bugs.openjdk.org/browse/JDK-8052325
-					if (constraint instanceof ConstraintExpressionFormula expressionFormula && expressionFormula.left instanceof LambdaExpression lambda && lambda.argumentsTypeElided()) {
+					if (constraint instanceof ConstraintExpressionFormula && ((ConstraintExpressionFormula) constraint).left instanceof LambdaExpression && ((LambdaExpression) ((ConstraintExpressionFormula) constraint).left).argumentsTypeElided()) {
+						LambdaExpression lambda = (LambdaExpression) ((ConstraintExpressionFormula) constraint).left;
+						ConstraintExpressionFormula expressionFormula = (ConstraintExpressionFormula) constraint;
 						addLambdaConstraintsToC(lambda, c, method, expressionFormula.right);
 					}
 				}
@@ -696,7 +698,8 @@ public class InferenceContext18 {
 		if (expri instanceof FunctionalExpression) {
 			c.add(new ConstraintExceptionFormula((FunctionalExpression) expri, substF));
 			// https://bugs.openjdk.org/browse/JDK-8052325
-			if (expri instanceof LambdaExpression lambda && !lambda.argumentsTypeElided()) {
+			if (expri instanceof LambdaExpression && !((LambdaExpression) expri).argumentsTypeElided()) {
+				LambdaExpression lambda = (LambdaExpression) expri;
 				addLambdaConstraintsToC(lambda, c, method, substF);
 			}
 		} else if (expri instanceof Invocation && expri.isPolyExpression()) {
@@ -708,7 +711,7 @@ public class InferenceContext18 {
 			MethodBinding innerMethod = invocation.binding();
 			if (innerMethod == null)
 				return true; 		  // -> proceed with no new C set elements.
-			if (innerMethod instanceof PolyParameterizedGenericMethodBinding poly && poly.hasOverloads)
+			if (innerMethod instanceof PolyParameterizedGenericMethodBinding && ((PolyParameterizedGenericMethodBinding) innerMethod).hasOverloads)
 				return true;		  // don't let ambiguous inner method influence outer inference
 
 			Expression[] arguments = invocation.arguments();
@@ -1537,7 +1540,8 @@ public class InferenceContext18 {
 						}
 					}
 				}
-				if (typeBound.right instanceof InferenceVariable ivRight) {
+				if (typeBound.right instanceof InferenceVariable) {
+					InferenceVariable ivRight = (InferenceVariable) typeBound.right;
 					// if T is an ivar then repeat in inverse direction (right-to-left)
 					typeBound = new TypeBound(ivRight, typeBound.left, ReductionResult.inverse(typeBound.relation));
 				} else {
@@ -1550,8 +1554,10 @@ public class InferenceContext18 {
 		for (Entry<ParameterizedTypeBinding, ParameterizedTypeBinding> capEntry : bounds.captures.entrySet()) {
 			Set<InferenceVariable> alphas = new LinkedHashSet<>();
 			for (TypeBinding arg : capEntry.getKey().arguments) {
-				if (arg instanceof InferenceVariable iv)
+				if (arg instanceof InferenceVariable) {
+					InferenceVariable iv = (InferenceVariable) arg;
 					alphas.add(iv);
+				}
 			}
 			if (alphas.isEmpty()) continue;
 			Set<InferenceVariable> allIVs = new LinkedHashSet<>();
@@ -1644,7 +1650,8 @@ public class InferenceContext18 {
 		int minStart = Integer.MAX_VALUE;
 		ConstraintFormula leftMost = null;
 		for (ConstraintFormula candidate : candidatesII) {
-			if (candidate instanceof ConstraintExpressionFormula cef && cef.left.sourceStart < minStart) {
+			if (candidate instanceof ConstraintExpressionFormula && ((ConstraintExpressionFormula) candidate).left.sourceStart < minStart) {
+				ConstraintExpressionFormula cef = (ConstraintExpressionFormula) candidate;
 				minStart = cef.left.sourceStart;
 				leftMost = cef;
 			}
@@ -1657,7 +1664,8 @@ public class InferenceContext18 {
 		//   constraint that contains the expression to the left of the expression of every other considered constraint.
 		for (ConstraintFormula candidate : candidatesII) {
 			// note: ConstraintExpressionFormula is the only shape left, which contains an expression
-			if (candidate instanceof ConstraintExceptionFormula cef && cef.left.sourceStart < minStart) {
+			if (candidate instanceof ConstraintExceptionFormula && ((ConstraintExceptionFormula) candidate).left.sourceStart < minStart) {
+				ConstraintExceptionFormula cef = (ConstraintExceptionFormula) candidate;
 				minStart = cef.left.sourceStart;
 				leftMost = cef;
 			}
@@ -2200,7 +2208,8 @@ public class InferenceContext18 {
 	}
 	private TypeBinding deriveTPrime(RecordPattern recordPattern, TypeBinding candidateT, InferenceVariable[] alphas, TypeBinding typeBinding) {
 		TypeBinding tPrime = candidateT.capture(this.scope, recordPattern.sourceStart, recordPattern.sourceEnd);
-		if (tPrime instanceof ParameterizedTypeBinding parameterizedType && parameterizedType.arguments != null) {
+		if (tPrime instanceof ParameterizedTypeBinding && ((ParameterizedTypeBinding) tPrime).arguments != null) {
+			ParameterizedTypeBinding parameterizedType = (ParameterizedTypeBinding) tPrime;
 			TypeBinding[] arguments = parameterizedType.arguments;
 			/* addTypeVariableSubstitutions() gives a beta for every argument which is
 			 * a super set of betas required by 18_5_5_item_3_bullet_1 betas.

@@ -177,17 +177,19 @@ public class RoundDispatcher {
 		} catch (Throwable e) {
 			// Keep AbortCompilation Exception from cancel during annotation processing as is:
 			// Currently IdeAnnotationProcessorManager.reportProcessorException would only log the exception.
-			if (e instanceof AbortCompilation cancelSignal) {
+			if (e instanceof AbortCompilation) {
+				AbortCompilation cancelSignal = (AbortCompilation) e;
 				throw cancelSignal;
 			}
 			// unfold InvocationTargetException:
-			if (e.getCause() instanceof AbortCompilation cancelSignal) {
+			if (e.getCause() instanceof AbortCompilation) {
+				AbortCompilation cancelSignal = (AbortCompilation) e.getCause();
 				throw cancelSignal;
 			}
 			// If a processor throws an exception (as opposed to reporting an error),
 			// report it and abort compilation by throwing AbortCompilation.
 			this._provider.reportProcessorException(pi._processor,
-					(e instanceof Exception ex) ? ex
+					(e instanceof Exception) ? (Exception) e
 							: new Exception(
 									"Error while processing Annotation Processor " + pi._processor.getClass().getName(), //$NON-NLS-1$
 									e));

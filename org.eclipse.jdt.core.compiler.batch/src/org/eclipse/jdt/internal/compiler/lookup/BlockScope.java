@@ -926,9 +926,10 @@ public Object[] getEmulationPath(ReferenceBinding targetEnclosingType, boolean o
 				Scope enclosingScope = currentMethodScope.parent;
 				currentMethodScope = null;
 				while (enclosingScope != null) {
-					if (enclosingScope instanceof ClassScope cs && TypeBinding.equalsEquals(cs.referenceContext.binding, targetEnclosingType)) {
+					if (enclosingScope instanceof ClassScope && TypeBinding.equalsEquals(((ClassScope) enclosingScope).referenceContext.binding, targetEnclosingType)) {
 						break; // any scopes outward from here are irrelevant
-					} else if (enclosingScope instanceof MethodScope ms) {
+					} else if (enclosingScope instanceof MethodScope) {
+						MethodScope ms = (MethodScope) enclosingScope;
 						currentMethodScope = ms; // found, check this scope below
 						break;
 					}

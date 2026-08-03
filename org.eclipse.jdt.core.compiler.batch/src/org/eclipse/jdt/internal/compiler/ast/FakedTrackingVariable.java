@@ -1010,7 +1010,8 @@ public class FakedTrackingVariable extends LocalDeclaration {
 
 	/* pre: usesOwningAnnotations. */
 	protected static int getNullStatusFromMessageSend(Expression expression, Scope scope) {
-		if (expression instanceof MessageSend message) {
+		if (expression instanceof MessageSend) {
+			MessageSend message = (MessageSend) expression;
 			checkMethodForMissingAnnotation(message, scope);
 			if ((((MessageSend) expression).binding.tagBits & TagBits.AnnotationNotOwning) != 0)
 				return FlowInfo.NON_NULL;

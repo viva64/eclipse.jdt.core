@@ -6798,7 +6798,8 @@ public void missingTypeInLambda(LambdaExpression lambda, MethodBinding method) {
 }
 public void missingTypeInMethod(ASTNode astNode, MethodBinding method) {
 	int nameSourceStart, nameSourceEnd;
-	if (astNode instanceof MessageSend messageSend) {
+	if (astNode instanceof MessageSend) {
+		MessageSend messageSend = (MessageSend) astNode;
 		nameSourceStart = (int) (messageSend.nameSourcePosition >>> 32);
 		nameSourceEnd = (int) messageSend.nameSourcePosition;
 	} else {
@@ -6810,14 +6811,16 @@ public void missingTypeInMethod(ASTNode astNode, MethodBinding method) {
 	List<TypeBinding> missingTypes = method.collectMissingTypes(null, true);
 	if (missingTypes != null) {
 		missingType = missingTypes.get(0);
-	} else if (method instanceof ProblemMethodBinding problem && problem.missingType != null) {
+	} else if (method instanceof ProblemMethodBinding && ((ProblemMethodBinding) method).missingType != null) {
+		ProblemMethodBinding problem = (ProblemMethodBinding) method;
 		missingType = problem.missingType;
 		problemId = IProblem.MissingTypeForInference;
 	} else {
 		assert false : "The method " + method + " is wrongly tagged as containing missing types"; //$NON-NLS-1$ //$NON-NLS-2$
 		return;
 	}
-	if (method instanceof ProblemMethodBinding problem) {
+	if (method instanceof ProblemMethodBinding) {
+		ProblemMethodBinding problem = (ProblemMethodBinding) method;
 		method = problem.closestMatch;
 	}
 	this.handle(
@@ -7194,10 +7197,14 @@ public void noSuchEnclosingInstance(TypeBinding targetType, ASTNode location, bo
 	}
 
 	int end = location.sourceEnd;
-	if (location instanceof LambdaExpression lambda)
+	if (location instanceof LambdaExpression) {
+		LambdaExpression lambda = (LambdaExpression) location;
 		end = lambda.diagnosticsSourceEnd();
-	else if (location instanceof QualifiedAllocationExpression qae && qae.anonymousType != null)
+	}
+	else if (location instanceof QualifiedAllocationExpression && ((QualifiedAllocationExpression) location).anonymousType != null) {
+		QualifiedAllocationExpression qae = (QualifiedAllocationExpression) location;
 		end = qae.anonymousType.sourceEnd;
+	}
 
 	this.handle(
 		id,
@@ -7216,7 +7223,7 @@ public void notCompatibleTypesError(ASTNode location, TypeBinding leftType, Type
 		rightShortName = rightName;
 	}
 	int problemId = IProblem.IncompatibleTypesInEqualityOperator;
-	if (location instanceof Pattern p && p.getEnclosingPattern() != null) {
+	if (location instanceof Pattern && ((Pattern) location).getEnclosingPattern() != null) {
 		problemId = IProblem.PatternTypeMismatch;
 	} else if (location instanceof InstanceOfExpression) {
 		problemId = IProblem.IncompatibleTypesInConditionalOperator;
@@ -9561,7 +9568,8 @@ public void previewAPIUsed(Scope scope, int sourceStart, int sourceEnd, IBinaryA
 	String featureName = null; // FIXME: do we need a default string to use if the name is not found below?
 	boolean isReflective = false;
 	for (IBinaryElementValuePair valuePair : previewAnnotation.getElementValuePairs()) {
-		if (valuePair.getValue() instanceof EnumConstantSignature enumSig) {
+		if (valuePair.getValue() instanceof EnumConstantSignature) {
+			EnumConstantSignature enumSig = (EnumConstantSignature) valuePair.getValue();
 			// extract the feature title from the enum constant:
 			char[] typeName = enumSig.getTypeName();
 			ReferenceBinding enumType = scope.environment().getTypeFromConstantPoolName(typeName, 1, typeName.length-1, false, null);
@@ -9573,7 +9581,8 @@ public void previewAPIUsed(Scope scope, int sourceStart, int sourceEnd, IBinaryA
 						ConstantPool.PREVIEW_FEATURE_JEP, 1, ConstantPool.PREVIEW_FEATURE_JEP.length-1)) { // skip 'L' and ';'
 					for (ElementValuePair elementValuePair : annotationBinding.getElementValuePairs()) {
 						if (CharOperation.equals(ConstantPool.TITLE, elementValuePair.getName())
-								&& elementValuePair.value instanceof StringConstant constant) {
+								&& elementValuePair.value instanceof StringConstant) {
+							StringConstant constant = (StringConstant) elementValuePair.value;
 							featureName = constant.stringValue();
 							break;
 						}
@@ -9582,8 +9591,10 @@ public void previewAPIUsed(Scope scope, int sourceStart, int sourceEnd, IBinaryA
 			}
 		} else
 			if (CharOperation.equals(valuePair.getName(), ConstantPool.REFLECTIVE)) {
-				if (valuePair.getValue() instanceof BooleanConstant bool)
+				if (valuePair.getValue() instanceof BooleanConstant) {
+					BooleanConstant bool = (BooleanConstant) valuePair.getValue();
 					isReflective = bool.booleanValue();
+				}
 		}
 	}
 
@@ -10106,10 +10117,14 @@ public void redundantSpecificationOfTypeArguments(TypeReference location, TypeBi
 		TypeReference[] typeArguments = null;
 		if (find.found) {
 			// when wildcards are in the mix then prefer showing type references, rather than processed bindings:
-			if (location instanceof ParameterizedSingleTypeReference pstr)
+			if (location instanceof ParameterizedSingleTypeReference) {
+				ParameterizedSingleTypeReference pstr = (ParameterizedSingleTypeReference) location;
 				typeArguments = pstr.typeArguments;
-			else if (location instanceof ParameterizedQualifiedTypeReference pqtr)
+			}
+			else if (location instanceof ParameterizedQualifiedTypeReference) {
+				ParameterizedQualifiedTypeReference pqtr = (ParameterizedQualifiedTypeReference) location;
 				typeArguments = pqtr.typeArguments[pqtr.typeArguments.length-1];
+			}
 		}
 		if (typeArguments != null) {
 			problemArguments = messageArguments = Arrays.stream(typeArguments).map(TypeReference::toString).collect(Collectors.joining(", ")); //$NON-NLS-1$
@@ -10573,7 +10588,8 @@ public void expressionPotentialNullReference(ASTNode location) {
 }
 
 public void cannotImplementIncompatibleNullness(ReferenceContext context, MethodBinding currentMethod, MethodBinding inheritedMethod, boolean showReturn) {
-	if (currentMethod instanceof SyntheticMethodBinding synth && synth.purpose == SyntheticMethodBinding.RecordComponentReadAccess) {
+	if (currentMethod instanceof SyntheticMethodBinding && ((SyntheticMethodBinding) currentMethod).purpose == SyntheticMethodBinding.RecordComponentReadAccess) {
+		SyntheticMethodBinding synth = (SyntheticMethodBinding) currentMethod;
 		recordComponentOverrideIncompatibleNullness(synth.sourceRecordComponent(), inheritedMethod, currentMethod.declaringClass);
 		return;
 	}
@@ -12280,7 +12296,7 @@ public void unnamedVariableMustHaveInitializer(LocalDeclaration variableDeclarat
 public void errorExpressionInEarlyConstructionContext(Expression expr) {
 	String[] arguments = new String[] {expr.toString()};
 	this.handle(
-		expr instanceof ThisReference thisRef && thisRef.inFieldReference
+		expr instanceof ThisReference && ((ThisReference) expr).inFieldReference
 			? IProblem.ThisInEarlyConstructionContext
 			: IProblem.ExpressionInEarlyConstructionContext,
 		arguments,

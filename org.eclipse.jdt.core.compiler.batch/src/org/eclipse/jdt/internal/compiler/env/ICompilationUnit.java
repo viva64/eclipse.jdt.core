@@ -61,7 +61,8 @@ default boolean ignoreOptionalProblems() {
  * @return the binding representing the module.
  */
 default ModuleBinding module(LookupEnvironment environment) {
-	if (environment.nameEnvironment instanceof IModuleAwareNameEnvironment modEnv) {
+	if (environment.nameEnvironment instanceof IModuleAwareNameEnvironment) {
+		IModuleAwareNameEnvironment modEnv = (IModuleAwareNameEnvironment) environment.nameEnvironment;
 		char[] moduleName = modEnv.isOnModulePath(this) ? getModuleName() : ModuleBinding.UNNAMED;
 		return environment.getModule(moduleName);
 	}

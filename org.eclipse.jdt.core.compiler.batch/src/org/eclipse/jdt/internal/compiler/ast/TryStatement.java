@@ -162,7 +162,8 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 					localVariableBinding.closeTracker = null;
 				}
 			} else { //expression
-				if (resource instanceof NameReference nameReference && nameReference.binding instanceof LocalVariableBinding) {
+				if (resource instanceof NameReference && ((NameReference) resource).binding instanceof LocalVariableBinding) {
+					NameReference nameReference = (NameReference) resource;
 					localVariableBinding = (LocalVariableBinding) nameReference.binding;
 					localVariableBinding.checkEffectiveFinality(currentScope, nameReference);
 				}
@@ -1055,7 +1056,8 @@ public void resolve(BlockScope upperScope) {
 					((Expression) this.resources[i]).resolvedType = new ProblemReferenceBinding(CharOperation.splitOn('.', resourceType.shortReadableName()), null, ProblemReasons.InvalidTypeForAutoManagedResource);
 				}
 				if (node.resolvedType != null && node.resolvedType.isValidBinding()) {
-					if (node instanceof NameReference nameReference) {
+					if (node instanceof NameReference) {
+						NameReference nameReference = (NameReference) node;
 						switch (node.bits & ASTNode.RestrictiveFlagMASK) {
 							case Binding.FIELD : {
 								FieldBinding resource = (FieldBinding) nameReference.binding;
@@ -1069,7 +1071,8 @@ public void resolve(BlockScope upperScope) {
 								break;
 							}
 						}
-					} else if (node instanceof FieldReference field) {
+					} else if (node instanceof FieldReference) {
+						FieldReference field = (FieldReference) node;
 						FieldBinding resource = field.binding;
 						if (!resource.isFinal())
 							this.scope.problemReporter().cannotReferToNonFinalField(resource, node);

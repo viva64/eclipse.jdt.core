@@ -42,7 +42,8 @@ public interface TypeOrLambda {
 			// Locations MethodBinding.computeSignature() and BlockScope.getEmulationPath() will faithfully
 			// use the information generated here, to decide about signature and call sequence.
 			while (outerScope != null) {
-				if (outerScope instanceof ClassScope cs) {
+				if (outerScope instanceof ClassScope) {
+					ClassScope cs = (ClassScope) outerScope;
 					if (earlySeen && !cs.insideEarlyConstructionContext) {
 						// a direct outer beyond an early construction context disrupts
 						// the chain of fields, supply a local copy instead (arg & field):
@@ -53,7 +54,7 @@ public interface TypeOrLambda {
 						break;
 				}
 				outerScope = outerScope.parent;
-				if (outerScope instanceof MethodScope ms && ms.isStatic)
+				if (outerScope instanceof MethodScope && ((MethodScope) outerScope).isStatic)
 					break;
 			}
 		}

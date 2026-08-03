@@ -824,7 +824,8 @@ private void createFields(IBinaryField[] iFields, IBinaryType binaryType, long s
 					if (declAnnotations != null) {
 						for (IBinaryAnnotation annotation : declAnnotations) {
 							char[] typeName = annotation.getTypeName();
-							if (CharOperation.equals(typeName, ConstantPool.PREVIEW_FEATURE) && field instanceof FieldBinding realField) {
+							if (CharOperation.equals(typeName, ConstantPool.PREVIEW_FEATURE) && field instanceof FieldBinding) {
+								FieldBinding realField = (FieldBinding) field;
 								realField.binaryPreviewAnnotation = annotation;
 								break;
 							} else if (CharOperation.equals(typeName, ConstantPool.PREVIEW_FEATURE_JEP)) {
