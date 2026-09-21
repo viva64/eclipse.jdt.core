@@ -163,7 +163,9 @@ public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, Fl
 				}
 			} else { //expression
 				if (resource instanceof NameReference && ((NameReference) resource).binding instanceof LocalVariableBinding) {
-					localVariableBinding = (LocalVariableBinding) ((NameReference) resource).binding;
+					NameReference nameReference = (NameReference) resource;
+					localVariableBinding = (LocalVariableBinding) nameReference.binding;
+					localVariableBinding.checkEffectiveFinality(currentScope, nameReference);
 				}
 				resolvedType = ((Expression) resource).resolvedType;
 				if (currentScope.compilerOptions().analyseResourceLeaks) {
@@ -573,18 +575,7 @@ public void generateCode(BlockScope currentScope, CodeStream codeStream) {
 				this.resourceExceptionLabels[i] = new ExceptionLabel(codeStream, null);
 				this.resourceExceptionLabels[i].placeStart();
 				if (i < resourceCount) {
-					Statement stmt = this.resources[i];
-					if (stmt instanceof NameReference) {
-						NameReference ref = (NameReference) stmt;
-						ref.bits |= ASTNode.IsCapturedOuterLocal; // TODO: selective flagging if ref.binding is not one of earlier inlined LVBs.
-						VariableBinding binding = (VariableBinding) ref.binding; // Only LVB expected here.
-						ref.checkEffectiveFinality(binding, this.scope);
-					} else if (stmt instanceof FieldReference) {
-						FieldReference fieldReference = (FieldReference) stmt;
-						if (!fieldReference.binding.isFinal())
-							this.scope.problemReporter().cannotReferToNonFinalField(fieldReference.binding, fieldReference);
-					}
-					stmt.generateCode(this.scope, codeStream); // Initialize resources ...
+					this.resources[i].generateCode(this.scope, codeStream); // Initialize resources ...
 				}
 			}
 		}
@@ -961,7 +952,7 @@ public boolean generateFinallyBlock(BlockScope currentScope, CodeStream codeStre
 			((StackMapFrameCodeStream) codeStream).popStateIndex();
 			return false;
 		default:
-			throw EclipseCompiler.REACHED_DEAD_CODE;
+			throw EclipseCompiler.UNEXPECTED_CONTROL_FLOW;
 	}
 }
 @Override
@@ -1012,9 +1003,9 @@ public void resolve(BlockScope upperScope) {
 	// special scope for secret locals optimization.
 	this.scope = new BlockScope(upperScope);
 
-	if (enclosingSwitchExpression(upperScope) instanceof SwitchExpression) {
-        SwitchExpression swich = (SwitchExpression) enclosingSwitchExpression(upperScope);
-        swich.jvmStackVolatile = true; // ought to prepare for any raised exception blowing up the the operand stack to smithereens
+	SwitchExpression swich;
+	if ((swich = enclosingSwitchExpression(upperScope)) != null) {
+		swich.jvmStackVolatile = true; // ought to prepare for any raised exception blowing up the the operand stack to smithereens
 	}
 	BlockScope finallyScope = null;
     BlockScope resourceManagementScope = null; // Single scope to hold all resources and additional secret variables.
@@ -1063,6 +1054,29 @@ public void resolve(BlockScope upperScope) {
 				} else if (resourceType != null) { // https://bugs.eclipse.org/bugs/show_bug.cgi?id=349862, avoid secondary error in problematic null case
 					upperScope.problemReporter().resourceHasToImplementAutoCloseable(resourceType, node);
 					((Expression) this.resources[i]).resolvedType = new ProblemReferenceBinding(CharOperation.splitOn('.', resourceType.shortReadableName()), null, ProblemReasons.InvalidTypeForAutoManagedResource);
+				}
+				if (node.resolvedType != null && node.resolvedType.isValidBinding()) {
+					if (node instanceof NameReference) {
+						NameReference nameReference = (NameReference) node;
+						switch (node.bits & ASTNode.RestrictiveFlagMASK) {
+							case Binding.FIELD : {
+								FieldBinding resource = (FieldBinding) nameReference.binding;
+								if (!resource.isFinal())
+									this.scope.problemReporter().cannotReferToNonFinalField(resource, node);
+								break;
+							}
+							case Binding.LOCAL: {
+								LocalVariableBinding resource = (LocalVariableBinding) nameReference.binding;
+								resource.tagBits |= TagBits.HasToBeEffectivelyFinal;
+								break;
+							}
+						}
+					} else if (node instanceof FieldReference) {
+						FieldReference field = (FieldReference) node;
+						FieldBinding resource = field.binding;
+						if (!resource.isFinal())
+							this.scope.problemReporter().cannotReferToNonFinalField(resource, node);
+					}
 				}
 			}
 		}
@@ -1270,35 +1284,5 @@ public boolean completesByContinue() {
 		}
 	}
 	return this.finallyBlock != null && this.finallyBlock.completesByContinue();
-}
-@Override
-public boolean canCompleteNormally() {
-	if (this.tryBlock.canCompleteNormally()) {
-		return (this.finallyBlock != null) ? this.finallyBlock.canCompleteNormally() : true;
-	}
-	if (this.catchBlocks != null) {
-		for (Block catchBlock : this.catchBlocks) {
-			if (catchBlock.canCompleteNormally()) {
-				return (this.finallyBlock != null) ? this.finallyBlock.canCompleteNormally() : true;
-			}
-		}
-	}
-	return false;
-}
-@Override
-public boolean continueCompletes() {
-	if (this.tryBlock.continueCompletes()) {
-		return (this.finallyBlock == null) ? true :
-			this.finallyBlock.canCompleteNormally() || this.finallyBlock.continueCompletes();
-	}
-	if (this.catchBlocks != null) {
-		for (Block catchBlock : this.catchBlocks) {
-			if (catchBlock.continueCompletes()) {
-				return (this.finallyBlock == null) ? true :
-					this.finallyBlock.canCompleteNormally() || this.finallyBlock.continueCompletes();
-			}
-		}
-	}
-	return this.finallyBlock != null && this.finallyBlock.continueCompletes();
 }
 }

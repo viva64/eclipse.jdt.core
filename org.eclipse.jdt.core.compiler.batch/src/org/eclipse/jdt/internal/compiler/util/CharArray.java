@@ -22,15 +22,21 @@ import java.util.Arrays;
  * <code>Arrays.hashCode</code> and <code>Arrays.equals</code>.
  * </p>
  */
-final class CharArray implements Comparable<CharArray> {
+public final class CharArray implements Comparable<CharArray> {
+
 	private final char[] key;
 
 	public CharArray(char[] key) {
 		this.key = key;
 	}
 
+	public char[] key() {
+		return this.key;
+	}
+
 	@Override
 	public int compareTo(CharArray o) {
+		// just any technical sort order for Comparable interface used in HashMap https://openjdk.org/jeps/180
 		return Arrays.compare(this.key, o.key);
 	}
 
@@ -40,14 +46,11 @@ final class CharArray implements Comparable<CharArray> {
 
 	@Override
 	public boolean equals(Object obj) {
-		if (this == obj) {
-			return true;
+		if (obj instanceof CharArray) {
+			CharArray other = (CharArray) obj;
+			return Arrays.equals(this.key, other.key);
 		}
-		if (!(obj instanceof CharArray)) {
-			return false;
-		}
-		CharArray other = (CharArray) obj;
-		return Arrays.equals(this.key, other.key);
+		return false;
 	}
 
 	@Override
@@ -55,9 +58,6 @@ final class CharArray implements Comparable<CharArray> {
 		return Arrays.hashCode(this.key);
 	}
 
-	/**
-	 * @return <code>Arrays.toString</code> of the underlying array
-	 */
 	@Override
 	public String toString() {
 		return Arrays.toString(this.key);

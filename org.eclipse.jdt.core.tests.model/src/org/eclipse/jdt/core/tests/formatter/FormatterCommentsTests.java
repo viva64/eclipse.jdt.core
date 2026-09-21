@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2022 IBM Corporation and others.
+ * Copyright (c) 2000, 2026 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -35,7 +35,6 @@ import org.eclipse.jdt.core.JavaModelException;
 import org.eclipse.jdt.core.formatter.CodeFormatter;
 import org.eclipse.jdt.core.formatter.DefaultCodeFormatterConstants;
 import org.eclipse.jdt.internal.compiler.ast.CompilationUnitDeclaration;
-import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.parser.Scanner;
 import org.eclipse.jdt.internal.compiler.util.Util;
@@ -115,7 +114,7 @@ protected void assumeSourceEquals(String message, String expected, String actual
 
 private String expectedFormattedSource(String source) {
 	DefaultCodeFormatter codeFormatter = codeFormatter();
-	Scanner scanner = new Scanner(true, true, false/*nls*/, ClassFileConstants.JDK1_4/*sourceLevel*/, null/*taskTags*/, null/*taskPriorities*/, true/*taskCaseSensitive*/,
+	Scanner scanner = new Scanner(true, true, false/*nls*/, CompilerOptions.getFirstSupportedJdkLevel()/*sourceLevel*/, null/*taskTags*/, null/*taskPriorities*/, true/*taskCaseSensitive*/,
 			codeFormatter.previewEnabled);
 	CodeSnippetParsingUtil codeSnippetParsingUtil = new CodeSnippetParsingUtil();
 	CompilationUnitDeclaration compilationUnitDeclaration = codeSnippetParsingUtil.parseCompilationUnit(source.toCharArray(), getDefaultCompilerOptions(), true);
@@ -1400,6 +1399,63 @@ public void testSnippet06() {
 		"public class T {\n" +
 		"}"
 	);
+}
+
+public void testAtInSnippet01() {
+	setComplianceLevel(CompilerOptions.VERSION_18);
+	String source = """
+			/**
+			 * {@snippet :
+			 * @SomeAnnotation
+			 * public class Example {
+			 * 			final int a =1;
+			 * 	final boolean b = 		true;
+			 * }
+			 * }
+			 */
+			class SomeClass3 {
+			}
+			""";
+	String expected = """
+			/**
+			 * {@snippet :
+			 * @SomeAnnotation
+			 * public class Example {
+			 * 	final int a = 1;
+			 * 	final boolean b = true;
+			 * }
+			 * }
+			 */
+			class SomeClass3 {
+			}
+			""";
+	formatSource(source, expected);
+}
+public void testAtInSnippet02() {
+	setComplianceLevel(CompilerOptions.VERSION_18);
+	String source = """
+			/**
+			 * {@snippet :
+			 * @SomeAnnotation
+			 * void someMethod(@ThisAnnotationWillBeFine blah) {
+			 * }
+			 * }
+			 */
+			class SomeClass {
+			}
+			""";
+	String expected = """
+			/**
+			 * {@snippet :
+			 * @SomeAnnotation
+			 * void someMethod(@ThisAnnotationWillBeFine blah) {
+			 * }
+			 * }
+			 */
+			class SomeClass {
+			}
+			""";
+	formatSource(source, expected);
 }
 public void testJoinLineComment01() {
 	this.formatterPrefs.join_line_comments = true;

@@ -49,6 +49,7 @@ import org.eclipse.jdt.internal.core.hierarchy.TypeHierarchy;
 import org.eclipse.jdt.internal.core.search.AbstractSearchScope;
 import org.eclipse.jdt.internal.core.search.JavaWorkspaceScope;
 import org.eclipse.jdt.internal.core.search.indexing.IndexManager;
+import org.eclipse.jdt.internal.core.search.indexing.DerivedSourceSearchParticipantRegistry;
 import org.eclipse.jdt.internal.core.util.Util;
 
 /**
@@ -226,7 +227,7 @@ public class DeltaProcessor {
 	 * Used for detecting external JAR changes
 	 */
 	public static long getTimeStamp(File file) {
-		return file.lastModified() + file.length();
+		return file.lastModified() + Long.hashCode(file.length()) * 31;
 	}
 
 	/*
@@ -2022,7 +2023,7 @@ public class DeltaProcessor {
 	 * Registers the given delta with this delta processor.
 	 */
 	public void registerJavaModelDelta(IJavaElementDelta delta) {
-		if (JavaModelManager.isReadOnly()) {
+		if (VERBOSE && JavaModelManager.isReadOnly()) {
 			ILog.get().warn("JavaModel change during read only operation", new IllegalStateException( //$NON-NLS-1$
 					"JavaModel modified during 'read only' operation. Consider to report this warning to https://github.com/eclipse-jdt/eclipse.jdt.core/issues. delta=" //$NON-NLS-1$
 							+ delta));
@@ -2801,6 +2802,9 @@ public class DeltaProcessor {
 									if (org.eclipse.jdt.internal.core.util.Util.isJavaLikeFileName(name)) {
 										Openable cu = (Openable)pkg.getCompilationUnit(name);
 										updateIndex(cu, child);
+									} else if (org.eclipse.jdt.internal.core.util.Util.isJavaDerivedFileName(name)
+										&& DerivedSourceSearchParticipantRegistry.hasParticipant(DerivedSourceSearchParticipantRegistry.getFileExtension(name))) {
+										updateDerivedSourceIndex((IFile) resource, child, indexManager);
 									}
 								} else if (org.eclipse.jdt.internal.compiler.util.Util.isClassFileName(name)) {
 									Openable classFile = (Openable)pkg.getClassFile(name);
@@ -2866,6 +2870,42 @@ public class DeltaProcessor {
 						this.manager.secondaryTypesRemoving(file, true);
 						break;
 				}
+		}
+	}
+	/**
+	 * Updates the search index for a derived source file (e.g. .kt, .kts) whose extension
+	 * is registered via the {@code org.eclipse.jdt.core.derivedSourceSearchParticipant} extension point.
+	 * <p>
+	 * Derived source files are indexed through their registered {@link org.eclipse.jdt.core.search.DerivedSourceSearchParticipant DerivedSourceSearchParticipant},
+	 * which is responsible for parsing the file and producing index entries (type declarations,
+	 * references, etc.) that enable cross-language search, type hierarchy, and call hierarchy.
+	 * <p>
+	 * The indexing logic mirrors
+	 * {@link #updateIndex(Openable, IResourceDelta) updateIndex} for compilation units:
+	 * <ul>
+	 *   <li>ADDED — schedule the file for indexing via its search participant</li>
+	 *   <li>CHANGED — re-index only if the file content or encoding actually changed
+	 *       (falls through to ADDED)</li>
+	 *   <li>REMOVED — remove the file's entries from the index</li>
+	 * </ul>
+	 *
+	 * @param file the derived source file that changed
+	 * @param delta the resource delta describing the change
+	 * @param indexManager the index manager to schedule indexing operations on
+	 */
+	private void updateDerivedSourceIndex(IFile file, IResourceDelta delta, IndexManager indexManager) {
+		switch (delta.getKind()) {
+			case IResourceDelta.CHANGED :
+				int flags = delta.getFlags();
+				if ((flags & IResourceDelta.CONTENT) == 0 && (flags & IResourceDelta.ENCODING) == 0)
+					break;
+				// $FALL-THROUGH$
+			case IResourceDelta.ADDED :
+				indexManager.addDerivedSource(file, file.getProject().getFullPath());
+				break;
+			case IResourceDelta.REMOVED :
+				indexManager.remove(Util.relativePath(file.getFullPath(), 1/*remove project segment*/), file.getProject().getFullPath());
+				break;
 		}
 	}
 	/*

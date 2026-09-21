@@ -193,9 +193,13 @@ public char[][][] collect() throws JavaModelException {
 				BinaryTypeBinding binding = this.locator.cacheBinaryType(this.type, null);
 				if (binding != null)
 					collectSuperTypeNames(binding, null);
-			} else {
-				ICompilationUnit unit = this.type.getCompilationUnit();
+			// Guard with instanceof: contributed search participants
+			// (e.g., Kotlin) may provide IType implementations that are
+			// non-binary but not SourceType. The supertype collection
+			// via Java AST parsing only applies to Java source types.
+			} else if (this.type instanceof SourceType) {
 				SourceType sourceType = (SourceType) this.type;
+				ICompilationUnit unit = this.type.getCompilationUnit();
 				boolean isTopLevelOrMember = sourceType.getOuterMostLocalContext() == null;
 				CompilationUnitDeclaration parsedUnit = buildBindings(unit, isTopLevelOrMember);
 				if (parsedUnit != null) {

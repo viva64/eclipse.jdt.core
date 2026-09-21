@@ -46,6 +46,7 @@ import org.eclipse.jdt.internal.codeassist.DOMCodeSelector;
 import org.eclipse.jdt.internal.compiler.IProblemFactory;
 import org.eclipse.jdt.internal.compiler.SourceElementParser;
 import org.eclipse.jdt.internal.compiler.ast.CompilationUnitDeclaration;
+import org.eclipse.jdt.internal.compiler.classfmt.ClassFileConstants;
 import org.eclipse.jdt.internal.compiler.env.IElementInfo;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 import org.eclipse.jdt.internal.compiler.lookup.TypeConstants;
@@ -128,9 +129,10 @@ protected boolean buildStructure(OpenableElementInfo info, final IProgressMonito
 	// generate structure and compute syntax problems if needed
 	JavaModelManager.PerWorkingCopyInfo perWorkingCopyInfo = getPerWorkingCopyInfo();
 	IJavaProject project = getJavaProject();
-	boolean createAST = info instanceof ASTHolderCUInfo ? ((ASTHolderCUInfo) info).astLevel != NO_AST : false;
-	boolean resolveBindings = info instanceof ASTHolderCUInfo ? ((ASTHolderCUInfo) info).resolveBindings : false;
-	int reconcileFlags = info instanceof ASTHolderCUInfo ? ((ASTHolderCUInfo) info).reconcileFlags : 0;
+	ASTHolderCUInfo astHolder = info instanceof ASTHolderCUInfo ? (ASTHolderCUInfo) info : null;
+	boolean createAST = astHolder != null ? astHolder.astLevel != NO_AST : false;
+	boolean resolveBindings = astHolder != null ? astHolder.resolveBindings : false;
+	int reconcileFlags = astHolder != null ? astHolder.reconcileFlags : 0;
 	boolean computeProblems = perWorkingCopyInfo != null && perWorkingCopyInfo.isActive() && project != null && JavaProject.hasJavaNature(project.getProject());
 	Map<String, String> options = this.getOptions(true);
 	if (!computeProblems) {
@@ -153,9 +155,9 @@ protected boolean buildStructure(OpenableElementInfo info, final IProgressMonito
 	}
 
 	CompilationUnit source = cloneCachingContents();
-	Map<String, CategorizedProblem[]> problems = info instanceof ASTHolderCUInfo ? ((ASTHolderCUInfo) info).problems : null;
+	Map<String, CategorizedProblem[]> problems = astHolder != null ? astHolder.problems : null;
 	if (DOM_BASED_OPERATIONS) {
-		ASTParser astParser = ASTParser.newParser(info instanceof ASTHolderCUInfo && ((ASTHolderCUInfo) info).astLevel > 0 ? ((ASTHolderCUInfo) info).astLevel : AST.getJLSLatest());
+		ASTParser astParser = ASTParser.newParser(astHolder != null && astHolder.astLevel > 0 ? astHolder.astLevel : AST.getJLSLatest());
 		astParser.setWorkingCopyOwner(getOwner());
 		astParser.setSource(this instanceof ClassFileWorkingCopy ? source : this);
 		astParser.setProject(getJavaProject());
@@ -172,11 +174,15 @@ protected boolean buildStructure(OpenableElementInfo info, final IProgressMonito
 		ASTNode dom = null;
 		try {
 			dom = astParser.createAST(pm);
+			if (computeProblems) {
+				// force resolution of bindings to load more problems
+				dom.getAST().resolveWellKnownType(Object.class.getName());
+			}
 		} catch (AbortCompilationUnit e) {
 			var problem = e.problem;
 			if (problem == null && e.exception instanceof IOException) {
-                IOException ioEx = (IOException) e.exception;
-                String path = source.getPath().toString();
+				IOException ioEx = (IOException) e.exception;
+				String path = source.getPath().toString();
 				String exceptionTrace = ioEx.getClass().getName() + ':' + ioEx.getMessage();
 				problem = new DefaultProblemFactory().createProblem(
 						path.toCharArray(),
@@ -196,8 +202,8 @@ protected boolean buildStructure(OpenableElementInfo info, final IProgressMonito
 			}
 		}
 		if (dom instanceof org.eclipse.jdt.core.dom.CompilationUnit) {
-            org.eclipse.jdt.core.dom.CompilationUnit newAST = (org.eclipse.jdt.core.dom.CompilationUnit) dom;
-            if (computeProblems) {
+			org.eclipse.jdt.core.dom.CompilationUnit newAST = (org.eclipse.jdt.core.dom.CompilationUnit) dom;
+			if (computeProblems) {
 				IProblem[] interestingProblems = Arrays.stream(newAST.getProblems())
 					.filter(problem ->
 						!ignoreOptionalProblems()
@@ -220,9 +226,8 @@ protected boolean buildStructure(OpenableElementInfo info, final IProgressMonito
 						.toArray(CategorizedProblem[]::new));
 				}
 			}
-			if (info instanceof ASTHolderCUInfo) {
-                ASTHolderCUInfo astHolder = (ASTHolderCUInfo) info;
-                astHolder.ast = newAST;
+			if (astHolder != null) {
+				astHolder.ast = newAST;
 			}
 			newAST.accept(new DOMToModelPopulator(newElements, this, unitInfo));
 			boolean structureKnown = true;
@@ -475,12 +480,14 @@ public IJavaElement[] codeSelect(int offset, int length, WorkingCopyOwner workin
 	}
 }
 
-public org.eclipse.jdt.core.dom.CompilationUnit getOrBuildAST(WorkingCopyOwner workingCopyOwner) throws JavaModelException {
+public org.eclipse.jdt.core.dom.CompilationUnit getOrBuildAST(WorkingCopyOwner workingCopyOwner, int focalPosition) throws JavaModelException {
 	if (this.ast != null) {
 		return this.ast;
 	}
 	Map<String, String> options = getOptions(true);
 	ASTParser parser = ASTParser.newParser(new AST(options).apiLevel()); // go through AST constructor to convert options to apiLevel
+	// but we should probably instead just use the latest Java version
+	// supported by the compiler
 	parser.setWorkingCopyOwner(workingCopyOwner);
 	parser.setSource(this);
 	// greedily enable everything assuming the AST will be used extensively for edition
@@ -488,9 +495,14 @@ public org.eclipse.jdt.core.dom.CompilationUnit getOrBuildAST(WorkingCopyOwner w
 	parser.setStatementsRecovery(true);
 	parser.setBindingsRecovery(true);
 	parser.setCompilerOptions(options);
+	parser.setFocalPosition(focalPosition);
 	if (parser.createAST(null) instanceof org.eclipse.jdt.core.dom.CompilationUnit) {
-        org.eclipse.jdt.core.dom.CompilationUnit newAST = (org.eclipse.jdt.core.dom.CompilationUnit) parser.createAST(null);
-        this.ast = newAST;
+		org.eclipse.jdt.core.dom.CompilationUnit newAST = (org.eclipse.jdt.core.dom.CompilationUnit) parser.createAST(null);
+		if (focalPosition >= 0) {
+			// do not store
+			return newAST;
+		}
+		this.ast = newAST;
 	}
 	return this.ast;
 }
@@ -634,7 +646,7 @@ public void discardWorkingCopy() throws JavaModelException {
 @Override
 public boolean equals(Object obj) {
 	if (!(obj instanceof CompilationUnit)) return false;
-    final CompilationUnit other = (CompilationUnit) obj;
+	CompilationUnit other = (CompilationUnit) obj;
 	return this.owner.equals(other.owner) && super.equals(obj);
 }
 
@@ -1507,6 +1519,11 @@ protected void updateTimeStamp(CompilationUnit original) throws JavaModelExcepti
 }
 
 @Override
+public void updateTimeStamp() throws JavaModelException {
+	updateTimeStamp(this);
+}
+
+@Override
 protected IStatus validateExistence(IResource underlyingResource) {
 	// check if this compilation unit can be opened
 	if (!isWorkingCopy()) { // no check is done on root kind or exclusion pattern for working copies
@@ -1567,23 +1584,26 @@ public void setOptions(Map<String, String> newOptions) {
 @Override
 public Map<String, String> getCustomOptions() {
 	if (this.owner != null) {
-		try {
-			Map<String, String> customOptions = this.getCompilationUnitElementInfo().getCustomOptions();
-			IJavaProject parentProject = getJavaProject();
-			Map<String, String> parentOptions = parentProject == null ? JavaCore.getOptions() : parentProject.getOptions(true);
-			if (JavaCore.ENABLED.equals(parentOptions.get(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES)) &&
-				AST.newAST(parentOptions).apiLevel() < AST.getJLSLatest()) {
-				// Disable preview features for older Java releases as it causes the compiler to fail later
-				if (customOptions != null) {
-					customOptions.put(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES, JavaCore.DISABLED);
-				} else {
-					customOptions = Map.of(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES, JavaCore.DISABLED);
-				}
+		Map<String, String> customOptions = null;
+		JavaModelManager manager = JavaModelManager.getJavaModelManager();
+		IElementInfo info = manager.getInfo(this);
+		// If the info has not been loaded, then nobody has called setOptions() yet.
+		// So no need to load the IElementInfo, which may also parse the cu.
+		if (info != null)
+			customOptions = ((CompilationUnitElementInfo)info).getCustomOptions();
+
+		IJavaProject parentProject = getJavaProject();
+		Map<String, String> parentOptions = parentProject == null ? JavaCore.getOptions() : parentProject.getOptions(true);
+		if (JavaCore.ENABLED.equals(parentOptions.get(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES)) &&
+			CompilerOptions.versionToJdkLevel(parentOptions.getOrDefault(JavaCore.COMPILER_SOURCE, JavaCore.latestSupportedJavaVersion())) < ClassFileConstants.getLatestJDKLevel()) {
+			// Disable preview features for older Java releases as it causes the compiler to fail later
+			if (customOptions != null) {
+				customOptions.put(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES, JavaCore.DISABLED);
+			} else {
+				customOptions = Map.of(JavaCore.COMPILER_PB_ENABLE_PREVIEW_FEATURES, JavaCore.DISABLED);
 			}
-			return customOptions == null ? Collections.emptyMap() : customOptions;
-		} catch (JavaModelException e) {
-			// do nothing
 		}
+		return customOptions == null ? Collections.emptyMap() : customOptions;
 	}
 
 	return Collections.emptyMap();

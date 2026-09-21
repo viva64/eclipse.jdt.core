@@ -570,4 +570,17 @@ public class TypesImpl implements Types {
         return (PrimitiveType) this._env.getFactory().newTypeMirror(unboxed);
     }
 
+	@Override
+	@SuppressWarnings("unchecked")
+	public <T extends TypeMirror> T stripAnnotations(T t) {
+        if (t instanceof TypeMirrorImpl) {
+        	TypeMirrorImpl typeImpl = (TypeMirrorImpl) t;
+        	Binding b = typeImpl.binding();
+        	if (b instanceof TypeBinding) {
+        		TypeBinding typeBinding = (TypeBinding) b;
+        		 return (T) this._env.getFactory().newTypeMirror(typeBinding.unannotated());
+        	}
+        }
+        return t;
+    }
 }

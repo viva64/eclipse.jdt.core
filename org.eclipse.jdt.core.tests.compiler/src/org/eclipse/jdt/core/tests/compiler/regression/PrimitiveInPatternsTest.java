@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2024 IBM Corporation and others.
+ * Copyright (c) 2024, 2026 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -12,27 +12,32 @@
  *******************************************************************************/
 package org.eclipse.jdt.core.tests.compiler.regression;
 
+import java.io.IOException;
 import java.util.Map;
 import junit.framework.Test;
+import org.eclipse.jdt.core.tests.util.PreviewTest;
+import org.eclipse.jdt.core.util.ClassFileBytesDisassembler;
+import org.eclipse.jdt.core.util.ClassFormatException;
 import org.eclipse.jdt.internal.compiler.batch.FileSystem;
 import org.eclipse.jdt.internal.compiler.env.INameEnvironment;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 
+@PreviewTest
 public class PrimitiveInPatternsTest extends AbstractRegressionTest9 {
 
-	private static final JavacTestOptions JAVAC_OPTIONS = new JavacTestOptions("--enable-preview -source 23");
+	private static final JavacTestOptions JAVAC_OPTIONS = new JavacTestOptions("--enable-preview -source 26");
 	private static final String[] VMARGS = new String[] {"--enable-preview"};
 	static {
 //		TESTS_NUMBERS = new int [] { 1 };
 //		TESTS_RANGE = new int[] { 1, -1 };
-//		TESTS_NAMES = new String[] { "testIssue2936" };
+//		TESTS_NAMES = new String[] { "testDominanceIssue4979_001" };
 	}
 	private String extraLibPath;
 	public static Class<?> testClass() {
 		return PrimitiveInPatternsTest.class;
 	}
 	public static Test suite() {
-		return buildMinimalComplianceTestSuite(testClass(), F_23);
+		return buildMinimalComplianceTestSuite(testClass(), F_26);
 	}
 	public PrimitiveInPatternsTest(String testName) {
 		super(testName);
@@ -54,9 +59,9 @@ public class PrimitiveInPatternsTest extends AbstractRegressionTest9 {
 	// Enables the tests to run individually
 	protected Map<String, String> getCompilerOptions(boolean preview) {
 		Map<String, String> defaultOptions = super.getCompilerOptions();
-		defaultOptions.put(CompilerOptions.OPTION_Compliance, CompilerOptions.VERSION_23);
-		defaultOptions.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_23);
-		defaultOptions.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_23);
+		defaultOptions.put(CompilerOptions.OPTION_Compliance, CompilerOptions.VERSION_26);
+		defaultOptions.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_26);
+		defaultOptions.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_26);
 		defaultOptions.put(CompilerOptions.OPTION_EnablePreviews, preview ? CompilerOptions.ENABLED : CompilerOptions.DISABLED);
 		defaultOptions.put(CompilerOptions.OPTION_ReportPreviewFeatures, CompilerOptions.WARNING);
 		return defaultOptions;
@@ -6937,10 +6942,20 @@ public class PrimitiveInPatternsTest extends AbstractRegressionTest9 {
 			"""
 			},
 			"----------\n" +
-			"1. ERROR in X.java (at line 4)\n" +
+			"1. WARNING in X.java (at line 4)\n" +
+			"	switch (d) {\n" +
+			"	        ^\n" +
+			"You are using a preview language feature that may or may not be supported in a future release\n" +
+			"----------\n" +
+			"2. ERROR in X.java (at line 4)\n" +
 			"	switch (d) {\n" +
 			"	        ^\n" +
 			"An enhanced switch statement should be exhaustive; a default label expected\n" +
+			"----------\n" +
+			"3. WARNING in X.java (at line 5)\n" +
+			"	case 1d : i = 1; break;\n" +
+			"	^^^^^^^\n" +
+			"You are using a preview language feature that may or may not be supported in a future release\n" +
 			"----------\n");
 	}
 
@@ -7091,8 +7106,8 @@ public class PrimitiveInPatternsTest extends AbstractRegressionTest9 {
 			"2");
    }
    // test from spec
-	public void _testSpec001() {
-		runConformTest(new String[] {
+	public void testSpec001() {
+		runNegativeTest(new String[] {
 			"X.java",
 				"""
 					public class X {
@@ -7112,10 +7127,15 @@ public class PrimitiveInPatternsTest extends AbstractRegressionTest9 {
 					}
 				"""
 			},
-			"100");
+			"----------\n" +
+			"1. ERROR in X.java (at line 8)\n" +
+			"	default -> -1;\n" +
+			"	^^^^^^^\n" +
+			"Switch case cannot have both unconditional pattern and default label\n" +
+			"----------\n");
 	}
-	public void _testSpec002() {
-		runConformTest(new String[] {
+	public void testSpec002() {
+		runNegativeTest(new String[] {
 			"X.java",
 				"""
 					public class X {
@@ -7136,9 +7156,14 @@ public class PrimitiveInPatternsTest extends AbstractRegressionTest9 {
 					}
 				"""
 			},
-			"100");
+			"----------\n" +
+			"1. ERROR in X.java (at line 9)\n" +
+			"	default -> -1;\n" +
+			"	^^^^^^^\n" +
+			"Switch case cannot have both unconditional pattern and default label\n" +
+			"----------\n");
 	}
-	public void _testSpec003() {
+	public void testSpec003() {
 		runConformTest(new String[] {
 			"X.java",
 				"""
@@ -7166,7 +7191,7 @@ public class PrimitiveInPatternsTest extends AbstractRegressionTest9 {
 			},
 			"JsonNumber[d=30.0]");
 	}
-	public void _testSpec004() {
+	public void testSpec004() {
 		runConformTest(new String[] {
 			"X.java",
 				"""
@@ -7201,7 +7226,7 @@ public class PrimitiveInPatternsTest extends AbstractRegressionTest9 {
 			},
 			"30");
 	}
-	public void _testSpec005() {
+	public void testSpec005() {
 		runConformTest(new String[] {
 			"X.java",
 				"""
@@ -7235,7 +7260,7 @@ public class PrimitiveInPatternsTest extends AbstractRegressionTest9 {
 			},
 			"double:30.0");
 	}
-	public void _testSpec006() {
+	public void testSpec006() {
 		runConformTest(new String[] {
 			"X.java",
 				"""
@@ -7271,6 +7296,74 @@ public class PrimitiveInPatternsTest extends AbstractRegressionTest9 {
 			},
 			"int:30");
 	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/3181
+	// VerifyError during conversion between T extends Long and double
+	public void testGH3181() {
+		runConformTest(new String[] {
+			"X.java",
+			"""
+			record Record<T extends Long>(T t) {
+			}
+
+			public class X {
+				public static <T extends Long> double foo(Record<T> s) {
+					return switch (s) {
+					case Record(double s1) -> s1 + 1.0;
+					default -> 0;
+					};
+				}
+
+				public static void main(String[] args) {
+					System.out.println(foo(new Record<>(42L)));
+				}
+			}
+			"""
+		},
+		"43.0");
+	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/3129
+	// VerifyError with instanceof record patterns with conversion from double to Long
+	public void testGH3129() {
+		runConformTest(new String[] {
+			"X.java",
+			"""
+			record Record(Long i) {
+			}
+
+			public class X {
+				public static double convert(Record r) {
+					return r instanceof Record(double d) ? d + 1.0 : 0;
+				}
+
+				public static void main(String[] args) {
+					System.out.println(convert(new Record(42L)));
+				}
+			}
+			"""
+		},
+		"43.0");
+	}
+
+	public void testIssuePrimitivesWithNull() {
+		runConformTest(new String[] {
+				"X.java",
+				"""
+				public class X  {
+				    record R(Integer i) {}
+				    public static int foo(R r) {
+				        if (r instanceof R(int i)) { return i; }
+				        return -1;
+				    }
+				    public static void main(String argv[]) {
+				        System.out.println(foo(new R(null)));
+				    }
+				}
+				"""
+				},
+				"-1");
+	}
 	public void _testSpec00X() {
 		runNegativeTest(new String[] {
 			"X.java",
@@ -7282,6 +7375,276 @@ public class PrimitiveInPatternsTest extends AbstractRegressionTest9 {
 			"	Zork();\n" +
 			"	^^^^\n" +
 			"The method Zork() is undefined for the type X\n" +
+			"----------\n");
+	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/3336
+	// [Enhanced Switch][Primitive Patterns] Bogus error: Case constants in a switch on 'Long' must have type 'long'
+	public void testIssue3336() {
+		runConformTest(new String[] {
+			"X.java",
+			"""
+			public interface X {
+
+				public static void main(String[] args) {
+					Long lng = Long.valueOf(42);
+
+					switch (lng) {
+					case -1l -> System.out.println("-1L");
+					case null -> System.out.println("Null");
+					default -> System.out.println("Default");
+					}
+				}
+
+			}
+			"""
+			},
+			"Default");
+	}
+	public void testIssue3505() {
+		runConformTest(new String[] {
+			"X.java",
+			"""
+				public class X {
+
+					public static int foo() {
+						Y<Float> y = new Y<>();
+						y.value = 100f;
+						return y.get() instanceof float ? 1 : 0;
+					}
+					public static void main(String[] args) {
+						System.out.println(X.foo());
+					}
+				}
+
+				class Y<T> {
+					T value;
+					public T get() {
+						return this.value;
+					}
+				}   			"""
+			},
+			"1");
+	}
+
+	public void testIssue3535_001() {
+		runConformTest(new String[] {
+			"X.java",
+			"""
+				public class X {
+
+					static Integer getInteger() {
+						return Integer.MIN_VALUE;
+					}
+					public int foo() {
+						Integer i = 10;
+						Y<Integer> f = new Y<>();
+						f.put(X.getInteger()); // This makes all the difference
+						return f.get() instanceof float ? 3 : 2;
+					}
+					public static void main(String[] args) {
+						System.out.println(new X().foo());
+					}
+
+				}
+				class Y <T> {
+				    T t;
+				    T get() {
+				        return t;
+				    }
+				    void put( T t) {
+				    	this.t = t;
+				    }
+				}
+				"""
+			},
+			"3");
+	}
+	public void testIssue3535_002() {
+		runConformTest(new String[] {
+			"X.java",
+			"""
+				public class X {
+
+					static Integer getInteger() {
+						return Integer.MAX_VALUE;
+					}
+					public int foo() {
+						Integer i = 10;
+						Y<Integer> f = new Y<>();
+						f.put(X.getInteger()); // This makes all the difference
+						return f.get() instanceof float ? 3 : 2;
+					}
+					public static void main(String[] args) {
+						System.out.println(new X().foo());
+					}
+
+				}
+				class Y <T> {
+				    T t;
+				    T get() {
+				        return t;
+				    }
+				    void put( T t) {
+				    	this.t = t;
+				    }
+				}
+				"""
+			},
+			"2");
+	}
+	public void testIssue3536() {
+		runConformTest(new String[] {
+			"X.java",
+			"""
+				record Record(Byte b) {}
+				public class X {
+					public static void main(String argv[]) {
+						X x = new X();
+						System.out.println(x.foo(new Record(null)));
+					}
+					public int foo(Record r) {
+						int result = 0;
+						result = r instanceof Record(short s) ? 0 : 1;
+						return result;
+					}
+				}
+			"""
+			},
+			"1");
+	}
+
+	public void testSwitchPrimitiveboolean_01() throws IOException, ClassFormatException {
+		runConformTest(new String[] { "X.java",
+				"""
+				public class X {
+
+				    public static int primitiveSwitch(boolean b) {
+				    	return switch(b) {
+				    	case true -> 100;
+				    	case false -> 200;
+				    	};
+				    }
+
+				    public static void main(String[] args) {
+				        System.out.println(primitiveSwitch(true));
+				        System.out.println(primitiveSwitch(false));
+					}
+				}
+				"""
+			},
+			"100\n"+
+			"200");
+		String expectedOutput = "invokedynamic 1 typeSwitch(boolean, int)";
+		verifyClassFile(expectedOutput, "X.class", ClassFileBytesDisassembler.SYSTEM);
+	}
+
+	public void testSwitchPrimitiveboolean_02() throws IOException, ClassFormatException {
+		runConformTest(new String[] { "X.java",
+				"""
+				public class X {
+					public static int primitiveSwitch(float f) {
+						return switch (f) {
+						case 1.0f -> 100;
+						//		case 0.999999999f -> 200;
+						default -> 300;
+						};
+					}
+
+					public static void main(String[] args) {
+						System.out.println(primitiveSwitch(1.0f));
+
+					}
+				}
+				"""
+			},
+			"100");
+		String expectedOutput =
+		"	Method arguments:\n" +
+		"		#50 1.0\n";
+		verifyClassFile(expectedOutput, "X.class", ClassFileBytesDisassembler.SYSTEM);
+	}
+	public void testSwitchPrimitiveboolean_03() throws IOException, ClassFormatException {
+		runConformTest(new String[] { "X.java",
+				"""
+				public class X {
+					public static int primitiveSwitch(long l) {
+						return switch (l) {
+						case 10L -> 100;
+						default -> 300;
+						};
+					}
+
+					public static void main(String[] args) {
+						System.out.println(primitiveSwitch(10L));
+
+					}
+				}
+				"""
+			},
+			"100");
+		String expectedOutput =
+		"	Method arguments:\n" +
+		"		#31 10\n";
+		verifyClassFile(expectedOutput, "X.class", ClassFileBytesDisassembler.SYSTEM);
+	}
+
+	public void testSwitchPrimitiveboolean_04() throws IOException, ClassFormatException {
+		runConformTest(new String[] { "X.java",
+				"""
+				public class X {
+					public static int primitiveSwitch(double d) {
+						return switch (d) {
+						case 10.0 -> 100;
+						default -> 300;
+						};
+					}
+
+					public static void main(String[] args) {
+						System.out.println(primitiveSwitch(10.0));
+
+					}
+				}
+				"""
+			},
+			"100");
+		String expectedOutput =
+		"	Method arguments:\n" +
+		"		#31 10.0\n";
+		verifyClassFile(expectedOutput, "X.class", ClassFileBytesDisassembler.SYSTEM);
+	}
+	public void testDominanceIssue4979_001() {
+		runNegativeTest(new String[] {
+			"X.java",
+				"""
+				public class X {
+					public int foo(Character c) {
+						int result = 0;
+						switch (c) {
+							case Character c1 -> {
+								result = c1;
+								break;
+							}
+							case 0 -> {  // Same goes for case (int) 0
+								result = 0;
+								break;
+							}
+						}
+						return result;
+					}
+				}
+				"""
+			},
+			"----------\n" +
+			"1. WARNING in X.java (at line 5)\n" +
+			"	case Character c1 -> {\n" +
+			"	     ^^^^^^^^^^^^\n" +
+			"You are using a preview language feature that may or may not be supported in a future release\n" +
+			"----------\n" +
+			"2. ERROR in X.java (at line 9)\n" +
+			"	case 0 -> {  // Same goes for case (int) 0\n" +
+			"	     ^\n" +
+			"This case label is dominated by one of the preceding case labels\n" +
 			"----------\n");
 	}
 

@@ -27,7 +27,7 @@ final class ReferenceBindingSetWrapper {
 
 	ReferenceBindingSetWrapper(ReferenceBinding referenceBinding) {
 		this.referenceBinding = referenceBinding;
-		this.hashCode = referenceBinding.identityHashCode();
+		this.hashCode = System.identityHashCode(referenceBinding);
 	}
 
 	@Override

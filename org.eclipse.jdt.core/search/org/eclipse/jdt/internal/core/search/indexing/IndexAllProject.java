@@ -10,10 +10,9 @@
  *
  * Contributors:
  *     IBM Corporation - initial API and implementation
+ *     Arcadiy Ivanov - javaDerivedSource indexing support
  *******************************************************************************/
 package org.eclipse.jdt.internal.core.search.indexing;
-
-import static org.eclipse.jdt.internal.core.JavaModelManager.trace;
 
 import java.io.IOException;
 import java.net.URI;
@@ -36,7 +35,6 @@ import org.eclipse.jdt.internal.compiler.util.SimpleLookupTable;
 import org.eclipse.jdt.internal.core.ClasspathEntry;
 import org.eclipse.jdt.internal.core.JavaProject;
 import org.eclipse.jdt.internal.core.index.Index;
-import org.eclipse.jdt.internal.core.search.processing.JobManager;
 import org.eclipse.jdt.internal.core.util.Util;
 
 public class IndexAllProject extends IndexRequest {
@@ -108,6 +106,7 @@ public class IndexAllProject extends IndexRequest {
 			String[] paths = index.queryDocumentNames(""); // all file names //$NON-NLS-1$
 			int max = paths == null ? 0 : paths.length;
 			final SimpleLookupTable indexedFileNames = new SimpleLookupTable(max == 0 ? 33 : max + 11);
+			final SimpleLookupTable derivedFileNames = new SimpleLookupTable(11);
 			final String OK = "OK"; //$NON-NLS-1$
 			final String DELETED = "DELETED"; //$NON-NLS-1$
 			if (paths != null) {
@@ -154,6 +153,13 @@ public class IndexAllProject extends IndexRequest {
 													if (Util.isExcluded(file, inclusionPatterns, exclusionPatterns))
 														return false;
 												indexedFileNames.put(Util.relativePath(file.getFullPath(), 1/*remove project segment*/), file);
+											} else if (org.eclipse.jdt.internal.core.util.Util.isJavaDerivedFileName(proxy.getName())
+													&& DerivedSourceSearchParticipantRegistry.hasParticipant(DerivedSourceSearchParticipantRegistry.getFileExtension(proxy.getName()))) {
+												IFile file = (IFile) proxy.requestResource();
+												if (exclusionPatterns != null || inclusionPatterns != null)
+													if (Util.isExcluded(file, inclusionPatterns, exclusionPatterns))
+														return false;
+												derivedFileNames.put(Util.relativePath(file.getFullPath(), 1/*remove project segment*/), file);
 											}
 											return false;
 										case IResource.FOLDER :
@@ -191,6 +197,20 @@ public class IndexAllProject extends IndexRequest {
 															|| indexLastModified < EFS.getStore(location).fetchInfo().getLastModified()
 														? (Object) file
 														: (Object) OK);
+											} else if (org.eclipse.jdt.internal.core.util.Util.isJavaDerivedFileName(proxy.getName())
+													&& DerivedSourceSearchParticipantRegistry.hasParticipant(DerivedSourceSearchParticipantRegistry.getFileExtension(proxy.getName()))) {
+												IFile file = (IFile) proxy.requestResource();
+												URI location = file.getLocationURI();
+												if (location == null) return false;
+												if (exclusionPatterns != null || inclusionPatterns != null)
+													if (Util.isExcluded(file, inclusionPatterns, exclusionPatterns))
+														return false;
+												String relativePathString = Util.relativePath(file.getFullPath(), 1/*remove project segment*/);
+												boolean needsIndexing = indexedFileNames.get(relativePathString) == null
+														|| indexLastModified < EFS.getStore(location).fetchInfo().getLastModified();
+												// clear DELETED marker so the indexedFileNames loop does not issue a spurious remove()
+												indexedFileNames.put(relativePathString, OK);
+												derivedFileNames.put(relativePathString, needsIndexing ? (Object) file : (Object) OK);
 											}
 											return false;
 										case IResource.FOLDER :
@@ -227,12 +247,27 @@ public class IndexAllProject extends IndexRequest {
 				}
 			}
 
+			// index derived source files via their registered search participants
+			names = derivedFileNames.keyTable;
+			values = derivedFileNames.valueTable;
+			for (int i = 0, namesLength = names.length; i < namesLength; i++) {
+				String name = (String) names[i];
+				if (name != null) {
+					if (this.isCancelled) return false;
+					Object value = values[i];
+					if (value != OK) {
+						if (value == DELETED)
+							this.manager.remove(name, this.containerPath);
+						else
+							this.manager.addDerivedSource((IFile) value, this.containerPath);
+					}
+				}
+			}
+
 			// request to save index when all cus have been indexed... also sets state to SAVED_STATE
 			this.manager.request(new SaveIndex(this.containerPath, this.manager));
 		} catch (CoreException | IOException e) {
-			if (JobManager.VERBOSE) {
-				trace("-> failed to index " + this.project + " because of the following exception:", e); //$NON-NLS-1$ //$NON-NLS-2$
-			}
+			Util.log(e, "Failed to index " + this.project + ": " + e.getMessage()); //$NON-NLS-1$ //$NON-NLS-2$
 			this.manager.removeIndex(this.containerPath);
 			return false;
 		} finally {

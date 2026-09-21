@@ -62,4 +62,15 @@ public abstract class ReductionResult {
 				throw new IllegalArgumentException("Unknown type relation "+relation); //$NON-NLS-1$
 		}
 	}
+
+	public static int inverse(int relation) {
+		switch (relation) {
+			case SUPERTYPE:
+				return SUBTYPE;
+			case SUBTYPE:
+				return SUPERTYPE;
+			default:
+				return relation;
+		}
+	}
 }

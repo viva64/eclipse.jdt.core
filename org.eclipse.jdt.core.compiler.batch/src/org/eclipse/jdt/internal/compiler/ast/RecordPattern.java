@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2022, 2023 IBM Corporation and others.
+ * Copyright (c) 2022, 2025 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -128,12 +128,13 @@ public class RecordPattern extends Pattern {
 			}
 		}
 
+		RecordComponentBinding[] componentBindings = this.resolvedType.components();
 		LocalVariableBinding [] bindings = NO_VARIABLES;
 		for (int i = 0, l = this.patterns.length; i < l; ++i) {
 			Pattern p = this.patterns[i];
+			p.setOuterExpressionType(componentBindings[i].type);
 			p.resolveTypeWithBindings(bindings, scope);
 			bindings = LocalVariableBinding.merge(bindings, p.bindingsWhenTrue());
-			p.setOuterExpressionType(this.resolvedType.components()[i].type);
 		}
 
 		if (this.resolvedType == null || !this.resolvedType.isValidBinding()) {
@@ -146,8 +147,8 @@ public class RecordPattern extends Pattern {
 			Pattern p1 = this.patterns[i];
 			RecordComponentBinding componentBinding = components[i];
 			if (p1 instanceof TypePattern) {
-                TypePattern tp = (TypePattern) p1;
-                if (tp.getType() == null || tp.getType().isTypeNameVar(scope)) {
+				TypePattern tp = (TypePattern) p1;
+				if (tp.getType() == null || tp.getType().isTypeNameVar(scope)) {
 					if (tp.local.binding != null) // rewrite with the inferred type
 						tp.local.binding.type = componentBinding.type;
 				}
@@ -176,12 +177,7 @@ public class RecordPattern extends Pattern {
 	}
 
 	@Override
-	public boolean matchFailurePossible() {
-		return this.patterns.length != 0; // if no deconstruction is involved, no failure is possible.
-	}
-
-	@Override
-	public boolean dominates(Pattern p) {
+	public boolean dominates(Pattern p, Scope scope) {
 		/* 14.30.3: A record pattern with type R and pattern list L dominates another record pattern
 		   with type S and pattern list M if (i) R and S name the same record class, and (ii)
 		   every component pattern, if any, in L dominates the corresponding component
@@ -204,7 +200,7 @@ public class RecordPattern extends Pattern {
 			if (this.patterns.length != rp.patterns.length)
 				return false;
 			for (int i = 0, length = this.patterns.length; i < length; i++) {
-				if (!this.patterns[i].dominates(rp.patterns[i])) {
+				if (!this.patterns[i].dominates(rp.patterns[i], scope)) {
 					return false;
 				}
 			}
@@ -245,6 +241,7 @@ public class RecordPattern extends Pattern {
 			labels.add(exceptionLabel);
 
 			TypeBinding componentType = p.accessorMethod.returnType;
+			checkForPrimitiveType(currentScope, p, componentType);
 			if (TypeBinding.notEquals(p.accessorMethod.original().returnType.erasure(),
 					componentType.erasure()))
 				codeStream.checkcast(componentType); // lastComponent ? [C] : [R, C]
@@ -252,7 +249,7 @@ public class RecordPattern extends Pattern {
 				if (!p.isUnnamed())
 					codeStream.dup(componentType); // lastComponent ? named ? ([C, C] : [R, C, C]) : ([C] : [R, C])
 				if (p instanceof TypePattern) {
-					((TypePattern) p).generateTypeCheck(currentScope, codeStream, matchFailLabel);
+					((TypePattern) p).generateTypeCheck(currentScope, codeStream);
 				} else {
 					codeStream.instance_of(p.resolvedType); // lastComponent ? named ? ([C, boolean] : [R, C, boolean]) : ([boolean] : [R, boolean])
 				}
@@ -265,7 +262,7 @@ public class RecordPattern extends Pattern {
 					if (current.index != outer.patterns.length - 1)
 						pops++;
 					current = outer;
-					outer = outer.getEnclosingPattern() instanceof RecordPattern ? (RecordPattern) outer.getEnclosingPattern() : null;
+					outer = outer.getEnclosingPattern();
 				}
 				while (pops > 1) {
 					codeStream.pop2();
@@ -289,6 +286,20 @@ public class RecordPattern extends Pattern {
 				eLabels.addAll(labels);
 			}
 			codeStream.patternAccessorMap.put(trapScope, eLabels);
+		}
+	}
+
+	private void checkForPrimitiveType(BlockScope currentScope, Pattern p, TypeBinding componentType) {
+		if (p.isTotalTypeNode && !componentType.isPrimitiveType() &&  p instanceof TypePattern) {
+			TypePattern tp = (TypePattern) p;
+			TypeBinding providedType = tp.resolvedType;
+			if (providedType != null && providedType.isPrimitiveType()) {
+				PrimitiveConversionRoute route = findPrimitiveConversionRoute(componentType, providedType, currentScope);
+				if (route != PrimitiveConversionRoute.NO_CONVERSION_ROUTE
+						|| !componentType.isPrimitiveType()) {
+					p.isTotalTypeNode = false;
+				}
+			}
 		}
 	}
 

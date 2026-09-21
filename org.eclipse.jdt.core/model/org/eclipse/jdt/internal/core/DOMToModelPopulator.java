@@ -13,16 +13,10 @@ package org.eclipse.jdt.internal.core;
 import java.util.*;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.Map.Entry;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.eclipse.core.runtime.ILog;
-import org.eclipse.jdt.core.Flags;
-import org.eclipse.jdt.core.IAnnotation;
-import org.eclipse.jdt.core.IImportDeclaration;
-import org.eclipse.jdt.core.IJavaElement;
-import org.eclipse.jdt.core.ILocalVariable;
-import org.eclipse.jdt.core.IMemberValuePair;
-import org.eclipse.jdt.core.JavaModelException;
-import org.eclipse.jdt.core.Signature;
+import org.eclipse.jdt.core.*;
 import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.core.compiler.InvalidInputException;
 import org.eclipse.jdt.core.dom.*;
@@ -37,7 +31,7 @@ import org.eclipse.jdt.internal.compiler.lookup.ExtraCompilerModifiers;
 import org.eclipse.jdt.internal.compiler.lookup.TypeConstants;
 import org.eclipse.jdt.internal.compiler.parser.RecoveryScanner;
 import org.eclipse.jdt.internal.compiler.parser.Scanner;
-import org.eclipse.jdt.internal.compiler.parser.TerminalTokens;
+import org.eclipse.jdt.internal.compiler.parser.TerminalToken;
 import org.eclipse.jdt.internal.core.ModuleDescriptionInfo.ModuleReferenceInfo;
 import org.eclipse.jdt.internal.core.ModuleDescriptionInfo.PackageExportInfo;
 import org.eclipse.jdt.internal.core.ModuleDescriptionInfo.ServiceInfo;
@@ -70,29 +64,27 @@ public class DOMToModelPopulator extends ASTVisitor {
 
 	private void addAsChild(JavaElementInfo parentInfo, IJavaElement childElement) {
 		if (childElement instanceof SourceRefElement) {
-            SourceRefElement element = (SourceRefElement) childElement;
-            while (Stream.of(parentInfo.getChildren())
+			SourceRefElement element = (SourceRefElement) childElement;
+			while (Stream.of(parentInfo.getChildren())
 					.filter(other -> other.getElementType() == element.getElementType())
 					.filter(other -> Objects.equals(other.getHandleIdentifier(), element.getHandleIdentifier()))
 					.findAny().isPresent()) {
 				element.incOccurrenceCount();
 			}
-            if (childElement instanceof SourceType) {
-                SourceType anonymousType = (SourceType) childElement;
-                if (anonymousType.isAnonymous()) {
-                    // occurrence count for anonymous types are counted from the including type
-                    IJavaElement parent = element.getParent().getAncestor(IJavaElement.TYPE);
-                    if (parent instanceof SourceType) {
-                        SourceType nestType = (SourceType) parent;
-                        anonymousType.localOccurrenceCount = this.nestedTypesCount.compute(nestType, (nest, currentCount) -> currentCount == null ? 1 : currentCount + 1); // occurrences count are 1-based
-                    }
-                }
-            }
+			if (childElement instanceof SourceType && ((SourceType) childElement).isAnonymous()) {
+				SourceType anonymousType = (SourceType) childElement;
+				// occurrence count for anonymous types are counted from the including type
+				IJavaElement parent = element.getParent().getAncestor(IJavaElement.TYPE);
+				if (parent instanceof SourceType) {
+					SourceType nestType = (SourceType) parent;
+					anonymousType.localOccurrenceCount = this.nestedTypesCount.compute(nestType, (nest, currentCount) -> currentCount == null ? 1 : currentCount + 1); // occurrences count are 1-based
+				}
+			}
 		}
 		if (parentInfo instanceof AnnotatableInfo && childElement instanceof IAnnotation) {
-            IAnnotation annotation = (IAnnotation) childElement;
-            AnnotatableInfo annotable = (AnnotatableInfo) parentInfo;
-            if (Stream.of(annotable.annotations).noneMatch(annotation::equals)) {
+			AnnotatableInfo annotable = (AnnotatableInfo) parentInfo;
+			IAnnotation annotation = (IAnnotation) childElement;
+			if (Stream.of(annotable.annotations).noneMatch(annotation::equals)) {
 				IAnnotation[] newAnnotations = Arrays.copyOf(annotable.annotations, annotable.annotations.length + 1);
 				newAnnotations[newAnnotations.length - 1] = annotation;
 				annotable.annotations = newAnnotations;
@@ -100,74 +92,74 @@ public class DOMToModelPopulator extends ASTVisitor {
 			return;
 		}
 		if (childElement instanceof TypeParameter) {
-            TypeParameter typeParam = (TypeParameter) childElement;
-            if (parentInfo instanceof SourceTypeElementInfo) {
-                SourceTypeElementInfo type = (SourceTypeElementInfo) parentInfo;
-                type.typeParameters = Arrays.copyOf(type.typeParameters, type.typeParameters.length + 1);
+			TypeParameter typeParam = (TypeParameter) childElement;
+			if (parentInfo instanceof SourceTypeElementInfo) {
+				SourceTypeElementInfo type = (SourceTypeElementInfo) parentInfo;
+				type.typeParameters = Arrays.copyOf(type.typeParameters, type.typeParameters.length + 1);
 				type.typeParameters[type.typeParameters.length - 1] = typeParam;
 				return;
 			}
 			if (parentInfo instanceof SourceMethodElementInfo) {
-                SourceMethodElementInfo method = (SourceMethodElementInfo) parentInfo;
-                method.typeParameters = Arrays.copyOf(method.typeParameters, method.typeParameters.length + 1);
+				SourceMethodElementInfo method = (SourceMethodElementInfo) parentInfo;
+				method.typeParameters = Arrays.copyOf(method.typeParameters, method.typeParameters.length + 1);
 				method.typeParameters[method.typeParameters.length - 1] = typeParam;
 				return;
 			}
 		}
 		if (parentInfo instanceof ImportContainerInfo && childElement instanceof org.eclipse.jdt.internal.core.ImportDeclaration) {
-            org.eclipse.jdt.internal.core.ImportDeclaration importDecl = (org.eclipse.jdt.internal.core.ImportDeclaration) childElement;
-            ImportContainerInfo current = (ImportContainerInfo) parentInfo;
-            IJavaElement[] newImports = Arrays.copyOf(current.getChildren(), current.getChildren().length + 1);
+			org.eclipse.jdt.internal.core.ImportDeclaration importDecl = (org.eclipse.jdt.internal.core.ImportDeclaration) childElement;
+			ImportContainerInfo current = (ImportContainerInfo) parentInfo;
+			IJavaElement[] newImports = Arrays.copyOf(current.getChildren(), current.getChildren().length + 1);
 			newImports[newImports.length - 1] = importDecl;
 			current.children = newImports;
 			return;
 		}
 		// if nothing more specialized, add as child
 		if (parentInfo instanceof SourceTypeElementInfo) {
-            SourceTypeElementInfo type = (SourceTypeElementInfo) parentInfo;
-            type.children = Arrays.copyOf(type.children, type.children.length + 1);
+			SourceTypeElementInfo type = (SourceTypeElementInfo) parentInfo;
+			type.children = Arrays.copyOf(type.children, type.children.length + 1);
 			type.children[type.children.length - 1] = childElement;
 			return;
 		}
 		if (parentInfo instanceof OpenableElementInfo) {
-            OpenableElementInfo openable = (OpenableElementInfo) parentInfo;
-            openable.addChild(childElement);
+			OpenableElementInfo openable = (OpenableElementInfo) parentInfo;
+			openable.addChild(childElement);
 			return;
 		}
 		if (parentInfo instanceof SourceMethodElementInfo // also matches constructor
-            && childElement instanceof LocalVariable
-            && ((LocalVariable) childElement).isParameter()) {
-            LocalVariable variable = (LocalVariable) childElement;
-            SourceMethodElementInfo method = (SourceMethodElementInfo) parentInfo;
-            ILocalVariable[] parameters = method.arguments != null ? Arrays.copyOf(method.arguments, method.arguments.length + 1) : new ILocalVariable[1];
+			&& childElement instanceof LocalVariable
+			&& ((LocalVariable) childElement).isParameter()) {
+			SourceMethodElementInfo method = (SourceMethodElementInfo) parentInfo;
+			LocalVariable variable = (LocalVariable) childElement;
+			ILocalVariable[] parameters = method.arguments != null ? Arrays.copyOf(method.arguments, method.arguments.length + 1) : new ILocalVariable[1];
 			parameters[parameters.length - 1] = variable;
 			method.arguments = parameters;
 			return;
 		}
 		if (parentInfo instanceof SourceMethodWithChildrenInfo) {
-            SourceMethodWithChildrenInfo method = (SourceMethodWithChildrenInfo) parentInfo;
-            IJavaElement[] newElements = Arrays.copyOf(method.children, method.children.length + 1);
+			SourceMethodWithChildrenInfo method = (SourceMethodWithChildrenInfo) parentInfo;
+			IJavaElement[] newElements = Arrays.copyOf(method.children, method.children.length + 1);
 			newElements[newElements.length - 1] = childElement;
 			method.children = newElements;
 			return;
 		}
 		if (parentInfo instanceof SourceFieldWithChildrenInfo) {
-            SourceFieldWithChildrenInfo field = (SourceFieldWithChildrenInfo) parentInfo;
-            IJavaElement[] newElements = Arrays.copyOf(field.children, field.children.length + 1);
+			SourceFieldWithChildrenInfo field = (SourceFieldWithChildrenInfo) parentInfo;
+			IJavaElement[] newElements = Arrays.copyOf(field.children, field.children.length + 1);
 			newElements[newElements.length - 1] = childElement;
 			field.children = newElements;
 			return;
 		}
 		if (parentInfo instanceof SourceConstructorWithChildrenInfo) {
-            SourceConstructorWithChildrenInfo constructor = (SourceConstructorWithChildrenInfo) parentInfo;
-            IJavaElement[] newElements = Arrays.copyOf(constructor.children, constructor.children.length + 1);
+			SourceConstructorWithChildrenInfo constructor = (SourceConstructorWithChildrenInfo) parentInfo;
+			IJavaElement[] newElements = Arrays.copyOf(constructor.children, constructor.children.length + 1);
 			newElements[newElements.length - 1] = childElement;
 			constructor.children = newElements;
 			return;
 		}
 		if (parentInfo instanceof InitializerWithChildrenInfo) {
-            InitializerWithChildrenInfo info = (InitializerWithChildrenInfo) parentInfo;
-            IJavaElement[] newElements = Arrays.copyOf(info.getChildren(), info.getChildren().length + 1);
+			InitializerWithChildrenInfo info = (InitializerWithChildrenInfo) parentInfo;
+			IJavaElement[] newElements = Arrays.copyOf(info.getChildren(), info.getChildren().length + 1);
 			newElements[newElements.length - 1] = childElement;
 			info.children = newElements;
 			return;
@@ -291,8 +283,8 @@ public class DOMToModelPopulator extends ASTVisitor {
 		JavaElementInfo toPopulateCategories = this.infos.peek();
 		while (toPopulateCategories != null) {
 			if (toPopulateCategories instanceof SourceTypeElementInfo) {
-                SourceTypeElementInfo parentTypeInfo = (SourceTypeElementInfo) toPopulateCategories;
-                parentTypeInfo.addCategories(newElement, categories);
+				SourceTypeElementInfo parentTypeInfo = (SourceTypeElementInfo) toPopulateCategories;
+				parentTypeInfo.addCategories(newElement, categories);
 				toPopulateCategories = (JavaElementInfo)parentTypeInfo.getEnclosingType();
 			} else {
 				break;
@@ -305,7 +297,7 @@ public class DOMToModelPopulator extends ASTVisitor {
 			}
 		}
 		if (node.getAST().apiLevel() > 2 && node.getSuperclassType() != null) {
-			newInfo.setSuperclassName(node.getSuperclassType().toString().toCharArray());
+			newInfo.setSuperclassName(typeName(node.getSuperclassType()).toCharArray());
 		}
 		if (node.getAST().apiLevel() >= AST.JLS17) {
 			char[][] permitted = ((List<Type>)node.permittedTypes()).stream().map(Type::toString).map(String::toCharArray).toArray(char[][]::new);
@@ -348,8 +340,8 @@ public class DOMToModelPopulator extends ASTVisitor {
 		JavaElementInfo toPopulateCategories = this.infos.peek();
 		while (toPopulateCategories != null) {
 			if (toPopulateCategories instanceof SourceTypeElementInfo) {
-                SourceTypeElementInfo parentTypeInfo = (SourceTypeElementInfo) toPopulateCategories;
-                parentTypeInfo.addCategories(newElement, categories);
+				SourceTypeElementInfo parentTypeInfo = (SourceTypeElementInfo) toPopulateCategories;
+				parentTypeInfo.addCategories(newElement, categories);
 				toPopulateCategories = (JavaElementInfo)parentTypeInfo.getEnclosingType();
 			} else {
 				break;
@@ -383,8 +375,8 @@ public class DOMToModelPopulator extends ASTVisitor {
 		JavaElementInfo toPopulateCategories = this.infos.peek();
 		while (toPopulateCategories != null) {
 			if (toPopulateCategories instanceof SourceTypeElementInfo) {
-                SourceTypeElementInfo parentTypeInfo = (SourceTypeElementInfo) toPopulateCategories;
-                parentTypeInfo.addCategories(newElement, categories);
+				SourceTypeElementInfo parentTypeInfo = (SourceTypeElementInfo) toPopulateCategories;
+				parentTypeInfo.addCategories(newElement, categories);
 				toPopulateCategories = (JavaElementInfo)parentTypeInfo.getEnclosingType();
 			} else {
 				break;
@@ -439,13 +431,13 @@ public class DOMToModelPopulator extends ASTVisitor {
 		setSourceRange(newInfo, node);
 		char[][] categories = getCategories(node);
 		newInfo.addCategories(newElement, categories);
-		newInfo.setSuperclassName("java.lang.Record".toCharArray());
+		newInfo.setSuperclassName("java.lang.Record".toCharArray()); //$NON-NLS-1$
 		newInfo.setSuperInterfaceNames(((List<Type>)node.superInterfaceTypes()).stream().map(Type::toString).map(String::toCharArray).toArray(char[][]::new));
 		JavaElementInfo toPopulateCategories = this.infos.peek();
 		while (toPopulateCategories != null) {
 			if (toPopulateCategories instanceof SourceTypeElementInfo) {
-                SourceTypeElementInfo parentTypeInfo = (SourceTypeElementInfo) toPopulateCategories;
-                parentTypeInfo.addCategories(newElement, categories);
+				SourceTypeElementInfo parentTypeInfo = (SourceTypeElementInfo) toPopulateCategories;
+				parentTypeInfo.addCategories(newElement, categories);
 				toPopulateCategories = (JavaElementInfo)parentTypeInfo.getEnclosingType();
 			} else {
 				break;
@@ -481,7 +473,7 @@ public class DOMToModelPopulator extends ASTVisitor {
 			setSourceRange(newInfo, node);
 			newInfo.setNameSourceStart(node.getName().getStartPosition());
 			newInfo.setNameSourceEnd(node.getName().getStartPosition() + node.getName().getLength() - 1);
-			newInfo.setTypeName(node.getType().toString().toCharArray());
+			newInfo.setTypeName(typeName(node.getType()).toCharArray());
 			newInfo.setFlags(toModelFlags(node.getModifiers(), false));
 			newInfo.isRecordComponent = true;
 			this.infos.push(newInfo);
@@ -520,11 +512,11 @@ public class DOMToModelPopulator extends ASTVisitor {
 		}
 		List<SingleVariableDeclaration> parameters = method.parameters();
 		if (method.getAST().apiLevel() >= AST.JLS16
-            && method.isCompactConstructor()
-            && (parameters == null || parameters.isEmpty())
-            && method.getParent() instanceof RecordDeclaration) {
-            RecordDeclaration parentRecord = (RecordDeclaration) method.getParent();
-            parameters = parentRecord.recordComponents();
+			&& method.isCompactConstructor()
+			&& (parameters == null || parameters.isEmpty())
+			&& method.getParent() instanceof RecordDeclaration) {
+			RecordDeclaration parentRecord = (RecordDeclaration) method.getParent();
+			parameters = parentRecord.recordComponents();
 		}
 		SourceMethod newElement = new SourceMethod(this.elements.peek(),
 			method.getName().getIdentifier(),
@@ -539,17 +531,17 @@ public class DOMToModelPopulator extends ASTVisitor {
 		info.setArgumentNames(parameters.stream().map(param -> param.getName().toString().toCharArray()).toArray(char[][]::new));
 		if (method.getAST().apiLevel() > 2) {
 			if (method.getReturnType2() != null) {
-				info.setReturnType(method.getReturnType2().toString().toCharArray());
+				info.setReturnType(typeName(method.getReturnType2()).toCharArray());
 			} else {
 				info.setReturnType("void".toCharArray()); //$NON-NLS-1$
 			}
 		}
 		if (this.infos.peek() instanceof SourceTypeElementInfo) {
-            SourceTypeElementInfo parentInfo = (SourceTypeElementInfo) this.infos.peek();
-            parentInfo.addCategories(newElement, getCategories(method));
+			SourceTypeElementInfo parentInfo = (SourceTypeElementInfo) this.infos.peek();
+			parentInfo.addCategories(newElement, getCategories(method));
 		}
 		if (method.getAST().apiLevel() >= AST.JLS8) {
-			info.setExceptionTypeNames(((List<Type>)method.thrownExceptionTypes()).stream().map(Type::toString).map(String::toCharArray).toArray(char[][]::new));
+			info.setExceptionTypeNames(((List<Type>)method.thrownExceptionTypes()).stream().map(DOMToModelPopulator::typeName).map(String::toCharArray).toArray(char[][]::new));
 		}
 		setSourceRange(info, method);
 		boolean isDeprecated = isNodeDeprecated(method);
@@ -585,7 +577,7 @@ public class DOMToModelPopulator extends ASTVisitor {
 		this.elements.push(newElement);
 		addAsChild(this.infos.peek(), newElement);
 		SourceAnnotationMethodInfo info = new SourceAnnotationMethodInfo();
-		info.setReturnType(method.getType().toString().toCharArray());
+		info.setReturnType(typeName(method.getType()).toCharArray());
 		setSourceRange(info, method);
 		((SourceTypeElementInfo)this.infos.peek()).addCategories(newElement, getCategories(method));
 		boolean isDeprecated = isNodeDeprecated(method);
@@ -638,8 +630,8 @@ public class DOMToModelPopulator extends ASTVisitor {
 		this.elements.push(newElement);
 		addAsChild(this.infos.peek(), newElement);
 		if (parent instanceof LocalVariable) {
-            LocalVariable variable = (LocalVariable) parent;
-            // also need to explicitly add annotations in the parent node,
+			LocalVariable variable = (LocalVariable) parent;
+			// also need to explicitly add annotations in the parent node,
 			// populating the elementInfo is not sufficient?
 			variable.annotations = Arrays.copyOf(variable.annotations, variable.annotations.length + 1);
 			variable.annotations[variable.annotations.length - 1] = newElement;
@@ -672,8 +664,8 @@ public class DOMToModelPopulator extends ASTVisitor {
 		this.elements.push(newElement);
 		addAsChild(this.infos.peek(), newElement);
 		if (parent instanceof LocalVariable) {
-            LocalVariable variable = (LocalVariable) parent;
-            // also need to explicitly add annotations in the parent node,
+			LocalVariable variable = (LocalVariable) parent;
+			// also need to explicitly add annotations in the parent node,
 			// populating the elementInfo is not sufficient?
 			variable.annotations = Arrays.copyOf(variable.annotations, variable.annotations.length + 1);
 			variable.annotations[variable.annotations.length - 1] = newElement;
@@ -700,8 +692,8 @@ public class DOMToModelPopulator extends ASTVisitor {
 		this.elements.push(newElement);
 		addAsChild(this.infos.peek(), newElement);
 		if (parent instanceof LocalVariable) {
-            LocalVariable variable = (LocalVariable) parent;
-            // also need to explicitly add annotations in the parent node,
+			LocalVariable variable = (LocalVariable) parent;
+			// also need to explicitly add annotations in the parent node,
 			// populating the elementInfo is not sufficient?
 			variable.annotations = Arrays.copyOf(variable.annotations, variable.annotations.length + 1);
 			variable.annotations[variable.annotations.length - 1] = newElement;
@@ -736,8 +728,8 @@ public class DOMToModelPopulator extends ASTVisitor {
 		JavaElementInfo toPopulateCategories = this.infos.peek();
 		while (toPopulateCategories != null) {
 			if (toPopulateCategories instanceof SourceTypeElementInfo) {
-                SourceTypeElementInfo parentTypeInfo = (SourceTypeElementInfo) toPopulateCategories;
-                toPopulateCategories = (JavaElementInfo)parentTypeInfo.getEnclosingType();
+				SourceTypeElementInfo parentTypeInfo = (SourceTypeElementInfo) toPopulateCategories;
+				toPopulateCategories = (JavaElementInfo)parentTypeInfo.getEnclosingType();
 			} else {
 				break;
 			}
@@ -745,27 +737,27 @@ public class DOMToModelPopulator extends ASTVisitor {
 		newInfo.setHandle(newElement);
 		setSourceRange(newInfo, decl);
 		if (decl.getParent() instanceof EnumConstantDeclaration) {
-            EnumConstantDeclaration enumConstantDeclaration = (EnumConstantDeclaration) decl.getParent();
-            setSourceRange(newInfo, enumConstantDeclaration);
+			EnumConstantDeclaration enumConstantDeclaration = (EnumConstantDeclaration) decl.getParent();
+			setSourceRange(newInfo, enumConstantDeclaration);
 			newInfo.setNameSourceStart(enumConstantDeclaration.getName().getStartPosition());
 			newInfo.setNameSourceEnd(enumConstantDeclaration.getName().getStartPosition() + enumConstantDeclaration.getName().getLength() - 1);
 		} else if (decl.getParent() instanceof ClassInstanceCreation) {
-            ClassInstanceCreation constructorInvocation = (ClassInstanceCreation) decl.getParent();
-            if (constructorInvocation.getAST().apiLevel() > 2) {
+			ClassInstanceCreation constructorInvocation = (ClassInstanceCreation) decl.getParent();
+			if (constructorInvocation.getAST().apiLevel() > 2) {
 				((List<SimpleType>)constructorInvocation.typeArguments())
 					.stream()
 					.map(SimpleType::getName)
 					.map(Name::getFullyQualifiedName)
 					.forEach(this.currentTypeParameters::add);
 				Type type = constructorInvocation.getType();
-				newInfo.setSuperclassName(type.toString().toCharArray());
+				newInfo.setSuperclassName(typeName(type).toCharArray());
 				newInfo.setNameSourceStart(type.getStartPosition());
 				// TODO consider leading comments just like in setSourceRange(newInfo, node);
 				newInfo.setSourceRangeStart(constructorInvocation.getStartPosition());
 				int length;
 				if (type instanceof ParameterizedType) {
-                    ParameterizedType pType = (ParameterizedType) type;
-                    length= pType.getType().getLength();
+					ParameterizedType pType = (ParameterizedType) type;
+					length= pType.getType().getLength();
 				} else {
 					length = type.getLength();
 				}
@@ -785,8 +777,8 @@ public class DOMToModelPopulator extends ASTVisitor {
 		this.elements.pop();
 		this.infos.pop();
 		if (decl.getParent() instanceof ClassInstanceCreation) {
-            ClassInstanceCreation constructorInvocation = (ClassInstanceCreation) decl.getParent();
-            if (constructorInvocation.getAST().apiLevel() > 2) {
+			ClassInstanceCreation constructorInvocation = (ClassInstanceCreation) decl.getParent();
+			if (constructorInvocation.getAST().apiLevel() > 2) {
 				((List<SimpleType>)constructorInvocation.typeArguments())
 				.stream()
 				.map(SimpleType::getName)
@@ -800,47 +792,50 @@ public class DOMToModelPopulator extends ASTVisitor {
 		if (dom == null ||
 			dom instanceof NullLiteral ||
 			(dom instanceof SimpleName && (
-                    "MISSING".equals(((SimpleName) dom).getIdentifier()) || //$NON-NLS-1$ // better compare with internal SimpleName.MISSING
-                    Arrays.equals(RecoveryScanner.FAKE_IDENTIFIER, ((SimpleName) dom).getIdentifier().toCharArray())))) {
+				"MISSING".equals(((SimpleName) dom).getIdentifier()) || //$NON-NLS-1$ // better compare with internal SimpleName.MISSING
+				Arrays.equals(RecoveryScanner.FAKE_IDENTIFIER, ((SimpleName) dom).getIdentifier().toCharArray())))) {
 			return new SimpleEntry<>(null, IMemberValuePair.K_UNKNOWN);
 		}
 		if (dom instanceof StringLiteral) {
-            StringLiteral stringValue = (StringLiteral) dom;
-            return new SimpleEntry<>(stringValue.getLiteralValue(), IMemberValuePair.K_STRING);
+			StringLiteral stringValue = (StringLiteral) dom;
+			try {
+				return new SimpleEntry<>(stringValue.getLiteralValue(), IMemberValuePair.K_STRING);
+			} catch (IllegalArgumentException e) {
+				// lombok oddity, let's ignore
+			}
 		}
 		if (dom instanceof BooleanLiteral) {
-            BooleanLiteral booleanValue = (BooleanLiteral) dom;
-            return new SimpleEntry<>(booleanValue.booleanValue(), IMemberValuePair.K_BOOLEAN);
+			BooleanLiteral booleanValue = (BooleanLiteral) dom;
+			return new SimpleEntry<>(booleanValue.booleanValue(), IMemberValuePair.K_BOOLEAN);
 		}
 		if (dom instanceof CharacterLiteral) {
-            CharacterLiteral charValue = (CharacterLiteral) dom;
-            return new SimpleEntry<>(charValue.charValue(), IMemberValuePair.K_CHAR);
+			CharacterLiteral charValue = (CharacterLiteral) dom;
+			return new SimpleEntry<>(charValue.charValue(), IMemberValuePair.K_CHAR);
 		}
 		if (dom instanceof TypeLiteral) {
-            TypeLiteral typeLiteral = (TypeLiteral) dom;
-            return new SimpleEntry<>(typeLiteral.getType(), IMemberValuePair.K_CLASS);
+			TypeLiteral typeLiteral = (TypeLiteral) dom;
+			return new SimpleEntry<>(typeLiteral.getType(), IMemberValuePair.K_CLASS);
 		}
 		if (dom instanceof SimpleName) {
-            SimpleName simpleName = (SimpleName) dom;
-            return new SimpleEntry<>(simpleName.toString(), IMemberValuePair.K_SIMPLE_NAME);
+			SimpleName simpleName = (SimpleName) dom;
+			return new SimpleEntry<>(simpleName.toString(), IMemberValuePair.K_SIMPLE_NAME);
 		}
 		if (dom instanceof QualifiedName) {
-            QualifiedName qualifiedName = (QualifiedName) dom;
-            return new SimpleEntry<>(qualifiedName.toString(), IMemberValuePair.K_QUALIFIED_NAME);
+			QualifiedName qualifiedName = (QualifiedName) dom;
+			return new SimpleEntry<>(qualifiedName.toString(), IMemberValuePair.K_QUALIFIED_NAME);
 		}
 		if (dom instanceof org.eclipse.jdt.core.dom.Annotation) {
-            org.eclipse.jdt.core.dom.Annotation annotation = (org.eclipse.jdt.core.dom.Annotation) dom;
-            return new SimpleEntry<>(toModelAnnotation(annotation, null), IMemberValuePair.K_ANNOTATION);
+			return new SimpleEntry<>(toModelAnnotation((org.eclipse.jdt.core.dom.Annotation) dom, null), IMemberValuePair.K_ANNOTATION);
 		}
 		if (dom instanceof ArrayInitializer) {
-            ArrayInitializer arrayInitializer = (ArrayInitializer) dom;
-            var values = ((List<Expression>)arrayInitializer.expressions()).stream().map(this::memberValue).collect(java.util.stream.Collectors.toUnmodifiableList());
-			var types = values.stream().map(Entry::getValue).distinct().collect(java.util.stream.Collectors.toUnmodifiableList());
+			ArrayInitializer arrayInitializer = (ArrayInitializer) dom;
+			var values = ((List<Expression>)arrayInitializer.expressions()).stream().map(this::memberValue).collect(Collectors.toList());
+			var types = values.stream().map(Entry::getValue).distinct().collect(Collectors.toList());
 			return new SimpleEntry<>(values.stream().map(Entry::getKey).toArray(), types.size() == 1 ? types.get(0) : IMemberValuePair.K_UNKNOWN);
 		}
 		if (dom instanceof NumberLiteral) {
-            NumberLiteral number = (NumberLiteral) dom;
-            String token = number.getToken();
+			NumberLiteral number = (NumberLiteral) dom;
+			String token = number.getToken();
 			int type = toAnnotationValuePairType(token);
 			Object value = token;
 			if ((type == IMemberValuePair.K_LONG && token.endsWith("L")) || //$NON-NLS-1$
@@ -848,21 +843,32 @@ public class DOMToModelPopulator extends ASTVisitor {
 				value = token.substring(0, token.length() - 1);
 			}
 			if (value instanceof String) {
-                String valueString = (String) value;
-                // I tried using `yield`, but this caused ECJ to throw an AIOOB, preventing compilation
+				String valueString = (String) value;
+				ValueRadix valueRadix = null;
+				// I tried using `yield`, but this caused ECJ to throw an AIOOB, preventing compilation
 				switch (type) {
 					case IMemberValuePair.K_INT: {
 						try {
 							value =  Integer.parseInt(valueString);
 						} catch (NumberFormatException e) {
 							type = IMemberValuePair.K_LONG;
-							value = Long.parseLong(valueString);
+							valueRadix = numberToStringRadix(valueString);
+							value = Long.parseLong(valueRadix.val, valueRadix.radix);
 						}
 						break;
 					}
-					case IMemberValuePair.K_LONG: value = Long.parseLong(valueString); break;
-					case IMemberValuePair.K_SHORT: value = Short.parseShort(valueString); break;
-					case IMemberValuePair.K_BYTE: value = Byte.parseByte(valueString); break;
+					case IMemberValuePair.K_LONG:
+						valueRadix = numberToStringRadix(valueString);
+						value = Long.parseLong(valueRadix.val, valueRadix.radix);
+						break;
+					case IMemberValuePair.K_SHORT:
+						valueRadix = numberToStringRadix(valueString);
+						value = Short.parseShort(valueRadix.val, valueRadix.radix);
+						break;
+					case IMemberValuePair.K_BYTE:
+						valueRadix = numberToStringRadix(valueString);
+						value = Byte.parseByte(valueRadix.val, valueRadix.radix);
+						break;
 					case IMemberValuePair.K_FLOAT: value = Float.parseFloat(valueString); break;
 					case IMemberValuePair.K_DOUBLE: value = Double.parseDouble(valueString); break;
 					default: throw new IllegalArgumentException("Type not (yet?) supported"); //$NON-NLS-1$
@@ -871,8 +877,8 @@ public class DOMToModelPopulator extends ASTVisitor {
 			return new SimpleEntry<>(value, type);
 		}
 		if (dom instanceof PrefixExpression) {
-            PrefixExpression prefixExpression = (PrefixExpression) dom;
-            Expression operand = prefixExpression.getOperand();
+			PrefixExpression prefixExpression = (PrefixExpression) dom;
+			Expression operand = prefixExpression.getOperand();
 			if (!(operand instanceof NumberLiteral) && !(operand instanceof BooleanLiteral)) {
 				return new SimpleEntry<>(null, IMemberValuePair.K_UNKNOWN);
 			}
@@ -882,30 +888,72 @@ public class DOMToModelPopulator extends ASTVisitor {
 		return new SimpleEntry<>(null, IMemberValuePair.K_UNKNOWN);
 	}
 
+	private static final class ValueRadix {
+		private final String val;
+		private final Integer radix;
+
+		ValueRadix(String val, Integer radix) {
+			this.val = val;
+			this.radix = radix;
+		}
+
+		public String val() {
+			return this.val;
+		}
+
+		public Integer radix() {
+			return this.radix;
+		}
+	}
+	private ValueRadix numberToStringRadix(String s) {
+		// 1. Remove underscores
+		s = s.replace("_", ""); //$NON-NLS-1$ //$NON-NLS-2$
+
+		// 2. Remove long suffix
+		if (s.endsWith("l") || s.endsWith("L")) {//$NON-NLS-1$ //$NON-NLS-2$
+		    s = s.substring(0, s.length() - 1);
+		}
+
+		int radix = 10;
+
+		// 3. Detect radix
+		if (s.startsWith("0x") || s.startsWith("0X")) {//$NON-NLS-1$ //$NON-NLS-2$
+		    radix = 16;
+		    s = s.substring(2);
+		} else if (s.startsWith("0b") || s.startsWith("0B")) {//$NON-NLS-1$ //$NON-NLS-2$
+		    radix = 2;
+		    s = s.substring(2);
+		} else if (s.startsWith("0") && s.length() > 1) {//$NON-NLS-1$
+		    radix = 8;
+		    s = s.substring(1);
+		}
+		return new ValueRadix(s, radix);
+	}
+
 	private int toAnnotationValuePairType(String token) {
 		// inspired by NumberLiteral.setToken
 		Scanner scanner = new Scanner();
 		scanner.setSource(token.toCharArray());
 		try {
-			int tokenType = scanner.getNextToken();
+			TerminalToken tokenType = scanner.getNextToken();
 			switch (tokenType) {
-				case TerminalTokens.TokenNameDoubleLiteral:
+				case TokenNameDoubleLiteral:
 					return IMemberValuePair.K_DOUBLE;
-				case TerminalTokens.TokenNameIntegerLiteral:
+				case TokenNameIntegerLiteral:
 					return IMemberValuePair.K_INT;
-				case TerminalTokens.TokenNameFloatingPointLiteral:
+				case TokenNameFloatingPointLiteral:
 					return IMemberValuePair.K_FLOAT;
-				case TerminalTokens.TokenNameLongLiteral:
+				case TokenNameLongLiteral:
 					return IMemberValuePair.K_LONG;
-				case TerminalTokens.TokenNameMINUS:
+				case TokenNameMINUS:
 					switch (scanner.getNextToken()) {
-						case TerminalTokens.TokenNameDoubleLiteral:
+						case TokenNameDoubleLiteral:
 							return IMemberValuePair.K_DOUBLE;
-						case TerminalTokens.TokenNameIntegerLiteral:
+						case TokenNameIntegerLiteral:
 							return IMemberValuePair.K_INT;
-						case TerminalTokens.TokenNameFloatingPointLiteral:
+						case TokenNameFloatingPointLiteral:
 							return IMemberValuePair.K_FLOAT;
-						case TerminalTokens.TokenNameLongLiteral:
+						case TokenNameLongLiteral:
 							return IMemberValuePair.K_LONG;
 						default:
 							throw new IllegalArgumentException("Invalid number literal : >" + token + "<"); //$NON-NLS-1$//$NON-NLS-2$
@@ -922,14 +970,14 @@ public class DOMToModelPopulator extends ASTVisitor {
 	private Annotation toModelAnnotation(org.eclipse.jdt.core.dom.Annotation domAnnotation, JavaElement parent) {
 		IMemberValuePair[] members;
 		if (domAnnotation instanceof NormalAnnotation) {
-            NormalAnnotation normalAnnotation = (NormalAnnotation) domAnnotation;
-            members = ((List<MemberValuePair>)normalAnnotation.values()).stream().map(domMemberValuePair -> {
+			NormalAnnotation normalAnnotation = (NormalAnnotation) domAnnotation;
+			members = ((List<MemberValuePair>)normalAnnotation.values()).stream().map(domMemberValuePair -> {
 				Entry<Object, Integer> value = memberValue(domMemberValuePair.getValue());
 				return new org.eclipse.jdt.internal.core.MemberValuePair(domMemberValuePair.getName().toString(), value.getKey(), value.getValue());
 			}).toArray(IMemberValuePair[]::new);
 		} else if (domAnnotation instanceof SingleMemberAnnotation) {
-            SingleMemberAnnotation single = (SingleMemberAnnotation) domAnnotation;
-            Entry<Object, Integer> value = memberValue(single.getValue());
+			SingleMemberAnnotation single = (SingleMemberAnnotation) domAnnotation;
+			Entry<Object, Integer> value = memberValue(single.getValue());
 			members = new IMemberValuePair[] { new org.eclipse.jdt.internal.core.MemberValuePair("value", value.getKey(), value.getValue())}; //$NON-NLS-1$
 		} else {
 			members = new IMemberValuePair[0];
@@ -945,6 +993,35 @@ public class DOMToModelPopulator extends ASTVisitor {
 
 	public static LocalVariable toLocalVariable(SingleVariableDeclaration parameter, JavaElement parent) {
 		return toLocalVariable(parameter, parent, parameter.getParent() instanceof MethodDeclaration);
+	}
+
+	public static LocalVariable toLocalVariable(VariableDeclarationFragment fragment, JavaElement parent) {
+		if (fragment.getParent() instanceof VariableDeclarationStatement) {
+			VariableDeclarationStatement variableDeclaration = (VariableDeclarationStatement) fragment.getParent();
+			return new LocalVariable(parent,
+				fragment.getName().getIdentifier(),
+				variableDeclaration.getStartPosition(),
+				variableDeclaration.getStartPosition() + variableDeclaration.getLength() - 1,
+				fragment.getName().getStartPosition(),
+				fragment.getName().getStartPosition() + fragment.getName().getLength() - 1,
+				Util.getSignature(variableDeclaration.getType()),
+				null, // I don't think we need this, also it's the ECJ's annotation node
+				toModelFlags(variableDeclaration.getModifiers(), false),
+				false);
+		} else if (fragment.getParent() instanceof VariableDeclarationExpression) {
+			VariableDeclarationExpression variableDeclaration = (VariableDeclarationExpression) fragment.getParent();
+			return new LocalVariable(parent,
+					fragment.getName().getIdentifier(),
+					variableDeclaration.getStartPosition(),
+					variableDeclaration.getStartPosition() + variableDeclaration.getLength() - 1,
+					fragment.getName().getStartPosition(),
+					fragment.getName().getStartPosition() + fragment.getName().getLength() - 1,
+					Util.getSignature(variableDeclaration.getType()),
+					null, // I don't think we need this, also it's the ECJ's annotation node
+					toModelFlags(variableDeclaration.getModifiers(), false),
+					false);
+		}
+		return null;
 	}
 
 	private static LocalVariable toLocalVariable(SingleVariableDeclaration parameter, JavaElement parent, boolean isParameter) {
@@ -972,11 +1049,11 @@ public class DOMToModelPopulator extends ASTVisitor {
 			this.elements.push(newElement);
 			addAsChild(parentInfo, newElement);
 			SourceFieldWithChildrenInfo info = new SourceFieldWithChildrenInfo(new IJavaElement[0]);
-			info.setTypeName(field.getType().toString().toCharArray());
+			info.setTypeName(typeName(field.getType()).toCharArray());
 			setSourceRange(info, field);
 			if (parentInfo instanceof SourceTypeElementInfo) {
-                SourceTypeElementInfo parentTypeInfo = (SourceTypeElementInfo) parentInfo;
-                parentTypeInfo.addCategories(newElement, categories);
+				SourceTypeElementInfo parentTypeInfo = (SourceTypeElementInfo) parentInfo;
+				parentTypeInfo.addCategories(newElement, categories);
 			}
 			info.setFlags(toModelFlags(field.getModifiers(), isDeprecated));
 			info.setNameSourceStart(fragment.getName().getStartPosition());
@@ -1055,7 +1132,7 @@ public class DOMToModelPopulator extends ASTVisitor {
 			.filter(RequiresDirective.class::isInstance)
 			.map(RequiresDirective.class::cast)
 			.map(this::toModuleReferenceInfo)
-			.collect(java.util.stream.Collectors.toUnmodifiableList()));
+			.collect(Collectors.toList()));
 		var javaBase = CharOperation.concatWith(TypeConstants.JAVA_BASE, '.');
 		if (!Arrays.equals(node.getName().toString().toCharArray(), javaBase)) {
 			ModuleReferenceInfo ref = new ModuleReferenceInfo();
@@ -1093,7 +1170,11 @@ public class DOMToModelPopulator extends ASTVisitor {
 
 		this.unitInfo.setModule(newElement);
 		try {
-			this.root.getJavaProject().setModuleDescription(newElement);
+			if (this.root.getPackageFragmentRoot().getResolvedClasspathEntry().getEntryKind() == IClasspathEntry.CPE_SOURCE
+				&& this.root.getParent() instanceof IPackageFragment
+				&& ((IPackageFragment) this.root.getParent()).getElementName().isEmpty()) {
+				this.root.getJavaProject().setModuleDescription(newElement);
+			}
 		} catch (JavaModelException e) {
 			ILog.get().error(e.getMessage(), e);
 		}
@@ -1167,7 +1248,7 @@ public class DOMToModelPopulator extends ASTVisitor {
 	private boolean hasDeprecatedAnnotation(List<IExtendedModifier> modifiers) {
 	return modifiers != null && modifiers.stream() //
 				.anyMatch(modifier ->
-                        modifier instanceof org.eclipse.jdt.core.dom.Annotation &&
+					modifier instanceof org.eclipse.jdt.core.dom.Annotation &&
 						(Deprecated.class.getName().equals(((org.eclipse.jdt.core.dom.Annotation) modifier).getTypeName().toString())
 						|| (Deprecated.class.getSimpleName().equals(((org.eclipse.jdt.core.dom.Annotation) modifier).getTypeName().toString()) && !hasAlternativeDeprecated()))
 				);
@@ -1241,10 +1322,12 @@ public class DOMToModelPopulator extends ASTVisitor {
 	private static int getStartConsideringLeadingComments(ASTNode node) {
 		int start = node.getStartPosition();
 		var unit = domUnit(node);
-		int index = unit.firstLeadingCommentIndex(node);
-		if (index >= 0 && index <= unit.getCommentList().size()) {
-			Comment comment = (Comment)unit.getCommentList().get(index);
-			start = comment.getStartPosition();
+		if (unit != null) {
+			int index = unit.firstLeadingCommentIndex(node);
+			if (index >= 0 && index <= unit.getCommentList().size()) {
+				Comment comment = (Comment)unit.getCommentList().get(index);
+				start = comment.getStartPosition();
+			}
 		}
 		return start;
 	}
@@ -1278,24 +1361,24 @@ public class DOMToModelPopulator extends ASTVisitor {
 
 	private Javadoc javadoc(ASTNode node) {
 		if (node instanceof BodyDeclaration && ((BodyDeclaration) node).getJavadoc() != null) {
-            BodyDeclaration body = (BodyDeclaration) node;
-            return body.getJavadoc();
+			BodyDeclaration body = (BodyDeclaration) node;
+			return body.getJavadoc();
 		}
 		if (node instanceof ModuleDeclaration && ((ModuleDeclaration) node).getJavadoc() != null) {
-            ModuleDeclaration module = (ModuleDeclaration) node;
-            return module.getJavadoc();
+			ModuleDeclaration module = (ModuleDeclaration) node;
+			return module.getJavadoc();
 		}
 		if (node instanceof TypeDeclaration && ((TypeDeclaration) node).getJavadoc() != null) {
-            TypeDeclaration type = (TypeDeclaration) node;
-            return type.getJavadoc();
+			TypeDeclaration type = (TypeDeclaration) node;
+			return type.getJavadoc();
 		}
 		if (node instanceof EnumDeclaration && ((EnumDeclaration) node).getJavadoc() != null) {
-            EnumDeclaration enumType = (EnumDeclaration) node;
-            return enumType.getJavadoc();
+			EnumDeclaration enumType = (EnumDeclaration) node;
+			return enumType.getJavadoc();
 		}
 		if (node instanceof FieldDeclaration && ((FieldDeclaration) node).getJavadoc() != null) {
-            FieldDeclaration field = (FieldDeclaration) node;
-            return field.getJavadoc();
+			FieldDeclaration field = (FieldDeclaration) node;
+			return field.getJavadoc();
 		}
 		org.eclipse.jdt.core.dom.CompilationUnit unit = domUnit(node);
 		int commentIndex = unit.firstLeadingCommentIndex(node);
@@ -1306,12 +1389,49 @@ public class DOMToModelPopulator extends ASTVisitor {
 					return null;
 				}
 				if (comment instanceof Javadoc &&
-                    ((Javadoc) comment).getStartPosition() <= node.getStartPosition()) {
-                    Javadoc javadoc = (Javadoc) comment;
-                    return javadoc;
+					((Javadoc) comment).getStartPosition() <= node.getStartPosition()) {
+					Javadoc javadoc = (Javadoc) comment;
+					return javadoc;
 				}
 			}
 		}
 		return null;
+	}
+
+	private static String typeName(Type type) {
+		if (type == null) {
+			return ""; //$NON-NLS-1$
+		}
+		if (type instanceof PrimitiveType) {
+			PrimitiveType primitive = (PrimitiveType) type;
+			return primitive.getPrimitiveTypeCode().toString();
+		}
+		if (type instanceof SimpleType) {
+			SimpleType simple = (SimpleType) type;
+			return simple.getName().toString();
+		}
+		if (type instanceof NameQualifiedType) {
+			NameQualifiedType nameQualified = (NameQualifiedType) type;
+			return nameQualified.getQualifier().toString() + '.' + nameQualified.getName().getIdentifier();
+		}
+		if (type instanceof QualifiedType) {
+			QualifiedType qtype = (QualifiedType) type;
+			return typeName(qtype.getQualifier()) + '.' + qtype.getName().getIdentifier();
+		}
+		if (type instanceof WildcardType) {
+			return type.toString();
+		}
+		if (type instanceof ArrayType) {
+			ArrayType arrayType = (ArrayType) type;
+			return typeName(arrayType.getElementType()) +
+					Collections.nCopies(arrayType.getDimensions(), "[]").stream().collect(Collectors.joining()); //$NON-NLS-1$
+		}
+		if (type instanceof ParameterizedType) {
+			ParameterizedType parameterizedType = (ParameterizedType) type;
+			return typeName(parameterizedType.getType()) + '<' +
+					((List<Type>)parameterizedType.typeArguments()).stream().map(DOMToModelPopulator::typeName).collect(Collectors.joining(",")) //$NON-NLS-1$
+					+ '>';
+		}
+		return type.toString();
 	}
 }

@@ -15,6 +15,9 @@
  *******************************************************************************/
 package org.eclipse.jdt.internal.compiler.parser;
 
+import static org.eclipse.jdt.internal.compiler.parser.TerminalToken.TokenNameLPAREN;
+import static org.eclipse.jdt.internal.compiler.parser.TerminalToken.TokenNameSEMICOLON;
+
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
@@ -28,7 +31,7 @@ import org.eclipse.jdt.internal.compiler.util.Util;
  * Internal method structure for parsing recovery
  */
 
-public class RecoveredMethod extends RecoveredElement implements TerminalTokens {
+public class RecoveredMethod extends RecoveredElement {
 
 	public AbstractMethodDeclaration methodDeclaration;
 
@@ -42,7 +45,6 @@ public class RecoveredMethod extends RecoveredElement implements TerminalTokens 
 	public int localTypeCount;
 
 	public RecoveredBlock methodBody;
-	public boolean discardBody = true;
 
 	int pendingModifiers;
 	int pendingModifersSourceStart = -1;
@@ -490,7 +492,7 @@ public void updateFromParserState(){
 					parser.astLengthStack[parser.astLengthPtr] --;
 					parser.astPtr --;
 					parser.listLength --;
-					parser.currentToken = 0;
+					parser.currentToken = TerminalToken.TokenNameNotAToken;
 				}
 				int argLength = parser.astLengthStack[parser.astLengthPtr];
 				int argStart = parser.astPtr - argLength + 1;
@@ -522,7 +524,7 @@ public void updateFromParserState(){
 							parser.astLengthStack[parser.astLengthPtr] = count;
 							parser.astPtr = argStart+count-1;
 							parser.listLength = count;
-							parser.currentToken = 0;
+							parser.currentToken = TerminalToken.TokenNameNotAToken;
 							break;
 						}
 						if (needUpdateRParenPos) parser.rParenPos = argument.sourceEnd + 1;
@@ -530,7 +532,7 @@ public void updateFromParserState(){
 						parser.astLengthStack[parser.astLengthPtr] = count;
 						parser.astPtr = argStart+count-1;
 						parser.listLength = count;
-						parser.currentToken = 0;
+						parser.currentToken = TerminalToken.TokenNameNotAToken;
 						break;
 					}
 				}
@@ -609,7 +611,7 @@ public RecoveredElement updateOnOpeningBrace(int braceStart, int braceEnd){
 				!= parser.scanner.searchLineNumber(braceEnd)){
 		 */
 		switch(parser().lastIgnoredToken){
-			case -1 :
+			case TokenNameInvalid :
 			case TokenNamethrows :
 				break;
 			default:

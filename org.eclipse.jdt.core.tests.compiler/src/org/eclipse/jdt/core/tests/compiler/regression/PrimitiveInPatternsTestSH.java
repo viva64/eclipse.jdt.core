@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2024 IBM Corporation and others.
+ * Copyright (c) 2024, 2025 IBM Corporation and others.
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
  * which accompanies this distribution, and is available at
@@ -12,16 +12,21 @@
  *******************************************************************************/
 package org.eclipse.jdt.core.tests.compiler.regression;
 
+import java.io.IOException;
 import java.util.Map;
 import junit.framework.Test;
 import org.eclipse.jdt.core.tests.compiler.regression.AbstractRegressionTest.JavacTestOptions.JavacHasABug;
+import org.eclipse.jdt.core.tests.util.PreviewTest;
+import org.eclipse.jdt.core.util.ClassFileBytesDisassembler;
+import org.eclipse.jdt.core.util.ClassFormatException;
 import org.eclipse.jdt.internal.compiler.batch.FileSystem;
 import org.eclipse.jdt.internal.compiler.env.INameEnvironment;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 
+@PreviewTest
 public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 
-	private static final JavacTestOptions JAVAC_OPTIONS = new JavacTestOptions("--enable-preview -source 23 -Xlint:-preview");
+	private static final JavacTestOptions JAVAC_OPTIONS = new JavacTestOptions("--enable-preview -source 26 -Xlint:-preview");
 	private static final String[] VMARGS = new String[] {"--enable-preview"};
 
 	private static final String[] PRIMITIVES = { "boolean", "byte", "char", "short", "int", "long", "float", "double" };
@@ -77,7 +82,7 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 		return PrimitiveInPatternsTestSH.class;
 	}
 	public static Test suite() {
-		return buildMinimalComplianceTestSuite(testClass(), F_23);
+		return buildMinimalComplianceTestSuite(testClass(), F_26);
 	}
 	public PrimitiveInPatternsTestSH(String testName) {
 		super(testName);
@@ -99,9 +104,9 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 	// Enables the tests to run individually
 	protected Map<String, String> getCompilerOptions(boolean preview) {
 		Map<String, String> defaultOptions = super.getCompilerOptions();
-		defaultOptions.put(CompilerOptions.OPTION_Compliance, CompilerOptions.VERSION_23);
-		defaultOptions.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_23);
-		defaultOptions.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_23);
+		defaultOptions.put(CompilerOptions.OPTION_Compliance, CompilerOptions.VERSION_26);
+		defaultOptions.put(CompilerOptions.OPTION_Source, CompilerOptions.VERSION_26);
+		defaultOptions.put(CompilerOptions.OPTION_TargetPlatform, CompilerOptions.VERSION_26);
 		defaultOptions.put(CompilerOptions.OPTION_EnablePreviews, preview ? CompilerOptions.ENABLED : CompilerOptions.DISABLED);
 		defaultOptions.put(CompilerOptions.OPTION_ReportPreviewFeatures, CompilerOptions.WARNING);
 		return defaultOptions;
@@ -132,20 +137,22 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 	@Override
 	protected void runConformTest(String[] testFiles, String expectedOutput) {
 		runConformTest(testFiles, expectedOutput, getCompilerOptions(true), VMARGS, JAVAC_OPTIONS);
+		checkPreviewFlag(testFiles);
 	}
 	@Override
 	protected void runConformTest(String[] testFiles, String expectedOutput, Map<String, String> customOptions) {
 		if(!isJRE23Plus)
 			return;
 		runConformTest(testFiles, expectedOutput, customOptions, VMARGS, JAVAC_OPTIONS);
+		checkPreviewFlag(testFiles);
 	}
 	protected void runConformTest(
-			String[] testFiles,
-			String expectedOutputString,
-			String[] classLibraries,
-			boolean shouldFlushOutputDirectory,
-			String[] vmArguments) {
-			runTest(
+		String[] testFiles,
+		String expectedOutputString,
+		String[] classLibraries,
+		boolean shouldFlushOutputDirectory,
+		String[] vmArguments) {
+		runTest(
 		 		// test directory preparation
 				shouldFlushOutputDirectory /* should flush output directory */,
 				testFiles /* test files */,
@@ -165,7 +172,21 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 				null /* do not check error string */,
 				// javac options
 				JavacTestOptions.DEFAULT /* default javac test options */);
+		checkPreviewFlag(testFiles);
+	}
+	void checkPreviewFlag(String[] testFiles) {
+		String className = testFiles[0].replace(".java", ".class");
+		try {
+			verifyClassFile("version 26 : 70.65535", className, ClassFileBytesDisassembler.SYSTEM);
+		} catch (IOException|ClassFormatException e) {
+			e.printStackTrace();
+			fail(e.getMessage());
 		}
+	}
+	private void runConformTest_skipPreviewCheck(String[] testFiles, String expectedOutput) {
+		// FIXME we skip checkPreviewFlag() because it's not yet set in a few cases!
+		runConformTest(testFiles, expectedOutput, getCompilerOptions(true), VMARGS, JAVAC_OPTIONS);
+	}
 	protected void runNegativeTest(String[] testFiles, String expectedCompilerLog) {
 		Map<String, String> customOptions = getCompilerOptions(true);
 		Runner runner = new Runner();
@@ -195,7 +216,7 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 	// https://cr.openjdk.org/~abimpoudis/instanceof/jep455-20240424/specs/instanceof-jls.html#jls-5.1.2
 	// 5.7 Testing Contexts
 	// Identity Conversion
-	public void testIdentity() {
+	public void testIdentity() throws IOException, ClassFormatException {
 		StringBuilder methods = new StringBuilder();
 		StringBuilder calls = new StringBuilder();
 		String methodTmpl =
@@ -224,6 +245,7 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 		classX.append(calls);
 		classX.append("}}\n");
 		runConformTest(new String[] { "X.java", classX.toString() }, MAX_VALUES_STRING);
+		verifyClassFile("version 26 : 70.65535", "X.class", ClassFileBytesDisassembler.SYSTEM);
 	}
 	public void testIdentityPattern() {
 		StringBuilder methods = new StringBuilder();
@@ -1082,7 +1104,8 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 	}
 
 	public void testNonPrim001() {
-		runConformTest(new String[] {
+		// no preview used
+		super.runConformTest(new String[] {
 			"X.java",
 				"""
 					class Y<T> {
@@ -1285,20 +1308,20 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 				"true|false|49|-1|1|-|49|-1|49|-1|49|-1|49.0|-1.0|49.0|-1.0|");
 	}
 
-	private void testPrimitivePatternInSwitch_from_unboxAndNarrow_NOK(String from, int idx, String expectedError) {
+	private void testPrimitivePatternInSwitch_from_unboxAndNarrow_NOK(String from, int idx, String suppress, String expectedError) {
 		assert from.equals(BOXES[idx]) : "mismatching from vs idx";
 		StringBuilder methods = new StringBuilder();
 		StringBuilder calls = new StringBuilder();
 		String classTmpl =
 				"""
-				public class X {
+				SUPPRESS public class X {
 				METHODS
 					public static void main(String... args) {
 						FROM vFROM= VAL;
 				CALLS
 					}
 				}
-				""".replaceAll("FROM", from).replace("VAL", GOODVALUES[idx]);
+				""".replaceAll("FROM", from).replace("VAL", GOODVALUES[idx]).replace("SUPPRESS", suppress);
 		String methodTmpl =
 				"""
 					public static PRIM switchPRIM(FROM in) {
@@ -1324,10 +1347,15 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 				expectedError);
 	}
 	public void testPrimitivePatternInSwitchShort_unboxAndNarrow_NOK() {
-		testPrimitivePatternInSwitch_from_unboxAndNarrow_NOK("Short", 3,
+		testPrimitivePatternInSwitch_from_unboxAndNarrow_NOK("Short", 3, "",
 				"""
 				----------
-				1. ERROR in X.java (at line 4)
+				1. WARNING in X.java (at line 4)
+					case byte v -> v;
+					     ^^^^^^
+				You are using a preview language feature that may or may not be supported in a future release
+				----------
+				2. ERROR in X.java (at line 4)
 					case byte v -> v;
 					     ^^^^^^
 				Type mismatch: cannot convert from Short to byte
@@ -1336,6 +1364,7 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 	}
 	public void testPrimitivePatternInSwitchInt_unboxAndNarrow_NOK() {
 		testPrimitivePatternInSwitch_from_unboxAndNarrow_NOK("Integer", 4,
+				"@SuppressWarnings(\"preview\")",
 				"""
 				----------
 				1. ERROR in X.java (at line 4)
@@ -1352,6 +1381,7 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 	}
 	public void testPrimitivePatternInSwitchLong_unboxAndNarrow_NOK() {
 		testPrimitivePatternInSwitch_from_unboxAndNarrow_NOK("Long", 5,
+				"@SuppressWarnings(\"preview\")",
 				"""
 				----------
 				1. ERROR in X.java (at line 4)
@@ -1373,6 +1403,7 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 	}
 	public void testPrimitivePatternInSwitchFloat_unboxAndNarrow_NOK() {
 		testPrimitivePatternInSwitch_from_unboxAndNarrow_NOK("Float", 6,
+				"@SuppressWarnings(\"preview\")",
 				"""
 				----------
 				1. ERROR in X.java (at line 4)
@@ -1399,6 +1430,7 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 	}
 	public void testPrimitivePatternInSwitchDouble_unboxAndNarrow_NOK() {
 		testPrimitivePatternInSwitch_from_unboxAndNarrow_NOK("Double", 7,
+				"@SuppressWarnings(\"preview\")",
 				"""
 				----------
 				1. ERROR in X.java (at line 4)
@@ -1445,15 +1477,30 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 			},
 			"""
 			----------
-			1. ERROR in X.java (at line 4)
+			1. WARNING in X.java (at line 4)
+				case byte b -> b;
+				     ^^^^^^
+			You are using a preview language feature that may or may not be supported in a future release
+			----------
+			2. ERROR in X.java (at line 4)
 				case byte b -> b;
 				     ^^^^^^
 			Type mismatch: cannot convert from Character to byte
 			----------
-			2. ERROR in X.java (at line 5)
+			3. WARNING in X.java (at line 5)
+				case short s -> s;
+				     ^^^^^^^
+			You are using a preview language feature that may or may not be supported in a future release
+			----------
+			4. ERROR in X.java (at line 5)
 				case short s -> s;
 				     ^^^^^^^
 			Type mismatch: cannot convert from Character to short
+			----------
+			5. WARNING in X.java (at line 6)
+				case char c -> c;
+				     ^^^^^^
+			You are using a preview language feature that may or may not be supported in a future release
 			----------
 			""");
 	}
@@ -1594,7 +1641,7 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 					}
 				}
 				""");
-		runConformTest(new String[] {"X.java", clazz.toString()}, expectedOuts, getCompilerOptions(true), VMARGS, JavacHasABug.JavacBug8341408);
+		runConformTest(new String[] {"X.java", clazz.toString()}, expectedOuts);
 	}
 	public void testInstanceof_widenUnbox_Byte() {
 		testInstanceof_widenUnbox("Byte", 1, "49+49|49+49|49+49|49.0+49.0|49.0+49.0|");
@@ -1612,6 +1659,68 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 		testInstanceof_widenUnbox("Float", 6, "49.0+49.0|");
 	}
 
+	public void testInstanceof_widenUnboxWiden() {
+		// see https://bugs.openjdk.org/browse/JDK-8342397
+		// which links to our https://mail.openjdk.org/pipermail/compiler-dev/2024-September/027630.html
+		runConformTest(new String[] {
+				"X.java",
+				"""
+				import java.util.List;
+				import java.util.Collections;
+				public class X {
+					static <T extends Short> void typeVariableSingle(T single) {
+						int i1 = single;
+						System.out.print(i1);
+						if (single instanceof int i)
+							System.out.print(i);
+						else
+							System.out.print('-');
+						switch (single) {
+							case int i -> System.out.print(i);
+							default -> System.out.print('-');
+						}
+						System.out.println();
+					}
+					static <T extends Short> void typeVariableList(List<T> list) {
+						int i1 = list.get(0);
+						System.out.print(i1);
+						if (list.get(0) instanceof int i)
+							System.out.print(i);
+						else
+							System.out.print('-');
+						switch (list.get(0)) {
+							case int i -> System.out.print(i);
+							default -> System.out.print('-');
+						}
+						System.out.println();
+					}
+					static void wildcard(List<? extends Short> list) {
+						int i1 = list.get(0);
+						System.out.print(i1);
+						if (list.get(0) instanceof int i)
+							System.out.print(i);
+						else
+							System.out.print('-');
+						switch (list.get(0)) {
+							case int i -> System.out.print(i);
+							default -> System.out.print('-');
+						}
+						System.out.println();
+					}
+					public static void main(String... args) {
+						Short s = 1;
+						typeVariableSingle(s);
+						typeVariableList(Collections.singletonList(s));
+						wildcard(Collections.singletonList(s));
+					}
+				}
+				"""
+			},
+			"""
+			111
+			111
+			111""");
+	}
 	public void testInstanceof_genericExpression() { // regression test for a checkCast which we failed to generate earlier
 		runConformTest(new String[] {
 				"X.java",
@@ -1701,7 +1810,13 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 					               ^
 				A switch expression should have a default case
 				----------
-				""");
+				2. WARNING in X.java (at line 5)
+					case char c -> c;
+					     ^^^^^^
+				You are using a preview language feature that may or may not be supported in a future release
+				----------
+				"""
+);
 	}
 
 	private void testNarrowingInSwitchFrom(String from, int idx, String expectedOut) {
@@ -1794,7 +1909,7 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 			"X.java",
 			"""
 			public class X {
-				int m1(long in) {
+				@SuppressWarnings("preview") int m1(long in) {
 					return switch(in) {
 						case 1 -> 1;
 						case 'a' -> 2;
@@ -1866,7 +1981,12 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 			     ^^
 		Case constants in a switch on 'Float' must have type 'float'
 		----------
-		4. ERROR in X.java (at line 8)
+		4. WARNING in X.java (at line 7)
+			case 4.0f -> 4;
+			^^^^^^^^^
+		You are using a preview language feature that may or may not be supported in a future release
+		----------
+		5. ERROR in X.java (at line 8)
 			case 5.0d -> 5;
 			     ^^^^
 		Case constants in a switch on 'Float' must have type 'float'
@@ -1901,11 +2021,11 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 			String calls = fillIn(callsTmpl, i);
 			String classX = fillIn(classTmpl, i)
 					.replace("CALLS", calls);
-			runConformTest(new String[] { "XBOX.java".replace("BOX", BOXES[i]), classX }, "12-2");
+			runConformTest_skipPreviewCheck(new String[] { "XBOX.java".replace("BOX", BOXES[i]), classX }, "12-2");
 		}
 	}
 	public void testSwitchOn_Boolean_OK() {
-		runConformTest(new String[] {
+		runConformTest_skipPreviewCheck(new String[] {
 			"X.java",
 			"""
 			public class X {
@@ -1949,12 +2069,17 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 			},
 			"""
 			----------
-			1. ERROR in XBoolean.java (at line 4)
+			1. WARNING in XBoolean.java (at line 4)
 				case true -> 1;
-				     ^^^^
-			Duplicate case
+				^^^^^^^^^
+			You are using a preview language feature that may or may not be supported in a future release
 			----------
-			2. ERROR in XBoolean.java (at line 5)
+			2. WARNING in XBoolean.java (at line 5)
+				case true -> 2;
+				^^^^^^^^^
+			You are using a preview language feature that may or may not be supported in a future release
+			----------
+			3. ERROR in XBoolean.java (at line 5)
 				case true -> 2;
 				     ^^^^
 			Duplicate case
@@ -1996,10 +2121,20 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 			},
 			"""
 			----------
-			1. ERROR in X.java (at line 3)
+			1. WARNING in X.java (at line 3)
+				return switch (b) {
+				               ^
+			You are using a preview language feature that may or may not be supported in a future release
+			----------
+			2. ERROR in X.java (at line 3)
 				return switch (b) {
 				               ^
 			A switch expression should have a default case
+			----------
+			3. WARNING in X.java (at line 4)
+				case true -> 1;
+				^^^^^^^^^
+			You are using a preview language feature that may or may not be supported in a future release
 			----------
 			""");
 	}
@@ -2028,6 +2163,21 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 					};
 				       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 			Switch cannot have both boolean values and a default label
+			----------
+			2. WARNING in X.java (at line 3)
+				return switch (b) {
+				               ^
+			You are using a preview language feature that may or may not be supported in a future release
+			----------
+			3. WARNING in X.java (at line 4)
+				case true -> 1;
+				^^^^^^^^^
+			You are using a preview language feature that may or may not be supported in a future release
+			----------
+			4. WARNING in X.java (at line 5)
+				case false -> 2;
+				^^^^^^^^^^
+			You are using a preview language feature that may or may not be supported in a future release
 			----------
 			""");
 	}
@@ -2058,6 +2208,16 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 					}
 				^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 			Switch cannot have both boolean values and a default label
+			----------
+			2. WARNING in X.java (at line 6)
+				case TRUE -> { break;}
+				^^^^^^^^^
+			You are using a preview language feature that may or may not be supported in a future release
+			----------
+			3. WARNING in X.java (at line 7)
+				case FALSE -> { break;}
+				^^^^^^^^^^
+			You are using a preview language feature that may or may not be supported in a future release
 			----------
 			""");
 	}
@@ -2131,10 +2291,20 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 				              ^
 			A switch expression should have a default case
 			----------
-			2. ERROR in X.java (at line 9)
+			2. WARNING in X.java (at line 5)
+				case float f -> f;
+				     ^^^^^^^
+			You are using a preview language feature that may or may not be supported in a future release
+			----------
+			3. ERROR in X.java (at line 9)
 				return switch(i) {
 				              ^
 			A switch expression should have a default case
+			----------
+			4. WARNING in X.java (at line 11)
+				case float f -> f;
+				     ^^^^^^^
+			You are using a preview language feature that may or may not be supported in a future release
 			----------
 			""");
 	}
@@ -2198,10 +2368,35 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 				              ^
 			A switch expression should have a default case
 			----------
-			2. ERROR in X.java (at line 9)
+			2. WARNING in X.java (at line 4)
+				case 1L -> 1.0f;
+				^^^^^^^
+			You are using a preview language feature that may or may not be supported in a future release
+			----------
+			3. WARNING in X.java (at line 5)
+				case float f -> f;
+				     ^^^^^^^
+			You are using a preview language feature that may or may not be supported in a future release
+			----------
+			4. WARNING in X.java (at line 9)
+				return switch(l) {
+				              ^
+			You are using a preview language feature that may or may not be supported in a future release
+			----------
+			5. ERROR in X.java (at line 9)
 				return switch(l) {
 				              ^
 			A switch expression should have a default case
+			----------
+			6. WARNING in X.java (at line 10)
+				case 1L -> 1.0d;
+				^^^^^^^
+			You are using a preview language feature that may or may not be supported in a future release
+			----------
+			7. WARNING in X.java (at line 11)
+				case double d -> d;
+				     ^^^^^^^^
+			You are using a preview language feature that may or may not be supported in a future release
 			----------
 			""");
 	}
@@ -2369,12 +2564,22 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 					     ^^^^^
 				This case label is dominated by one of the preceding case labels
 				----------
-				4. ERROR in X.java (at line 18)
+				4. WARNING in X.java (at line 18)
+					case short s -> s; // additionally dominated by int i
+					     ^^^^^^^
+				You are using a preview language feature that may or may not be supported in a future release
+				----------
+				5. ERROR in X.java (at line 18)
 					case short s -> s; // additionally dominated by int i
 					     ^^^^^^^
 				This case label is dominated by one of the preceding case labels
 				----------
-				5. ERROR in X.java (at line 24)
+				6. WARNING in X.java (at line 24)
+					case short s -> s; // dominated by int i
+					     ^^^^^^^
+				You are using a preview language feature that may or may not be supported in a future release
+				----------
+				7. ERROR in X.java (at line 24)
 					case short s -> s; // dominated by int i
 					     ^^^^^^^
 				This case label is dominated by one of the preceding case labels
@@ -2400,6 +2605,11 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 					if (this instanceof int i)
 					    ^^^^^^^^^^^^^^^^^^^^^
 				Incompatible conditional operand types X and int
+				----------
+				2. WARNING in X.java (at line 3)
+					if (this instanceof int i)
+					                    ^^^^^
+				You are using a preview language feature that may or may not be supported in a future release
 				----------
 				""");
 	}
@@ -2427,204 +2637,9 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 			"2.0");
 	}
 
-	// test from spec
-	public void _testSpec001() {
-		runConformTest(new String[] {
-			"X.java",
-				"""
-					public class X {
-						public int getStatus() {
-							return 100;
-						}
-						public static int foo(X x) {
-							return switch (x.getStatus()) {
-						    case int i -> i;
-							default -> -1;
-						};
-						}
-						public static void main(String[] args) {
-							X x = new X();
-							System.out.println(X.foo(x));
-						}
-					}
-				"""
-			},
-			"100");
-	}
-	public void _testSpec002() {
-		runConformTest(new String[] {
-			"X.java",
-				"""
-					public class X {
-						public int getStatus() {
-							return 100;
-						}
-						public static int foo(X x) {
-							return switch (x.getStatus()) {
-						    case int i when i > 10 -> i * i;
-						    case int i -> i;
-							default -> -1;
-						};
-						}
-						public static void main(String[] args) {
-							X x = new X();
-							System.out.println(X.foo(x));
-						}
-					}
-				"""
-			},
-			"100");
-	}
-	public void _testSpec003() {
-		runConformTest(new String[] {
-			"X.java",
-				"""
-					import java.util.Map;
-
-					sealed interface JsonValue {}
-					record JsonString(String s) implements JsonValue { }
-					record JsonNumber(double d) implements JsonValue { }
-					record JsonObject(Map<String, JsonValue> map) implements JsonValue { }
-
-
-					public class X {
-
-						public static void foo() {
-							var json = new JsonObject(Map.of("name", new JsonString("John"),
-					                "age",  new JsonNumber(30)));
-					        JsonValue v = json.map().get("age");
-							System.out.println(v);
-						}
-						public static void main(String[] args) {
-							X.foo();
-						}
-					}
-				"""
-			},
-			"JsonNumber[d=30.0]");
-	}
-	public void _testSpec004() {
-		runConformTest(new String[] {
-			"X.java",
-				"""
-					import java.util.Map;
-
-					sealed interface JsonValue {}
-					record JsonString(String s) implements JsonValue { }
-					record JsonNumber(double d) implements JsonValue { }
-					record JsonObject(Map<String, JsonValue> map) implements JsonValue { }
-
-
-					public class X {
-
-						public static JsonObject foo() {
-							var json = new JsonObject(Map.of("name", new JsonString("John"),
-					                "age",  new JsonNumber(30)));
-							return json;
-						}
-						public static void bar(Object json) {
-							if (json instanceof JsonObject(var map)
-								    && map.get("name") instanceof JsonString(String n)
-								    && map.get("age")  instanceof JsonNumber(double a)) {
-								    int age = (int)a;  // unavoidable (and potentially lossy!) cast
-								    System.out.println(age);
-								}
-						}
-						public static void main(String[] args) {
-							X.bar(X.foo());
-						}
-					}
-				"""
-			},
-			"30");
-	}
-	public void _testSpec005() {
-		runConformTest(new String[] {
-			"X.java",
-				"""
-					import java.util.HashMap;
-					import java.util.Map;
-
-					sealed interface I {}
-					record ZNumber(double d) implements I { }
-					record ZObject(Map<String, I> map) implements I { }
-
-
-					public class X {
-
-						public static ZObject foo() {
-							Map<String, I> myMap = new HashMap<>();
-							myMap.put("age",  new ZNumber(30));
-							return new ZObject(myMap);
-						}
-						public static void bar(Object json) {
-							if (json instanceof ZObject(var map)) {
-								if (map.get("age")  instanceof ZNumber(double d)) {
-									System.out.println("double:"+d);
-								}
-							}
-						}
-						public static void main(String[] args) {
-							X.bar(X.foo());
-						}
-					}
-				"""
-			},
-			"double:30.0");
-	}
-	public void _testSpec006() {
-		runConformTest(new String[] {
-			"X.java",
-				"""
-					import java.util.HashMap;
-					import java.util.Map;
-
-					sealed interface I {}
-					record ZNumber(double d) implements I { }
-					record ZObject(Map<String, I> map) implements I { }
-
-
-					public class X {
-
-						public static ZObject foo() {
-							Map<String, I> myMap = new HashMap<>();
-							myMap.put("age",  new ZNumber(30));
-							return new ZObject(myMap);
-						}
-						public static void bar(Object json) {
-							if (json instanceof ZObject(var map)) {
-								if (map.get("age")  instanceof ZNumber(int i)) {
-									System.out.println("int:"+i);
-								} else if (map.get("age")  instanceof ZNumber(double d)) {
-									System.out.println("double:"+d);
-								}
-							}
-						}
-						public static void main(String[] args) {
-							X.bar(X.foo());
-						}
-					}
-				"""
-			},
-			"int:30");
-	}
-	public void _testSpec00X() {
-		runNegativeTest(new String[] {
-			"X.java",
-				"""
-      			"""
-			},
-			"----------\n" +
-			"2. ERROR in X.java (at line 16)\n" +
-			"	Zork();\n" +
-			"	^^^^\n" +
-			"The method Zork() is undefined for the type X\n" +
-			"----------\n");
-	}
-
 	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/3265
 	// [Primitive Patterns] Wrong duplicate case error
-	public void _testIssue3265() {
+	public void testIssue3265() {
 		runConformTest(new String[] {
 				"X.java",
 				"""
@@ -2648,5 +2663,819 @@ public class PrimitiveInPatternsTestSH extends AbstractRegressionTest9 {
 				}
 				"""},
 				"1.0|1.5|1.6|");
+	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/3265
+	// [Primitive Patterns] Wrong duplicate case error
+	public void testIssue3265_2() {
+		runNegativeTest(new String[] {
+				"X.java",
+				"""
+				public class X {
+					public static String switchfloatMoreCases(float f) {
+						return switch (f) {
+						case 1.0f -> "1.0";
+						case 0.5f + 0.5f -> "1.0";
+						default -> String.valueOf(f);
+						};
+					}
+
+					public static void main(String... args) {
+						System.out.print(switchfloatMoreCases(1.0f));
+						System.out.print("|");
+						System.out.print(switchfloatMoreCases(1.5f));
+						System.out.print("|");
+						System.out.print(switchfloatMoreCases(1.6f));
+						System.out.print("|");
+					}
+				}
+				"""},
+				"""
+				----------
+				1. WARNING in X.java (at line 3)
+					return switch (f) {
+					               ^
+				You are using a preview language feature that may or may not be supported in a future release
+				----------
+				2. WARNING in X.java (at line 4)
+					case 1.0f -> "1.0";
+					^^^^^^^^^
+				You are using a preview language feature that may or may not be supported in a future release
+				----------
+				3. WARNING in X.java (at line 5)
+					case 0.5f + 0.5f -> "1.0";
+					^^^^^^^^^^^^^^^^
+				You are using a preview language feature that may or may not be supported in a future release
+				----------
+				4. ERROR in X.java (at line 5)
+					case 0.5f + 0.5f -> "1.0";
+					     ^^^^^^^^^^^
+				Duplicate case
+				----------
+				""");
+	}
+
+	// https://github.com/eclipse-jdt/eclipse.jdt.core/issues/3337
+	// [Enhanced Switch][Primitive Patterns] ECJ tolerates default case in boolean switch with both true and false cases.
+	public void testIssue3337() {
+		runNegativeTest(new String[] {
+			"X.java",
+			"""
+			public class X {
+				@SuppressWarnings("preview")
+				public static void main(String[] args) {
+					Boolean b = true;
+					switch (b) {
+						case true -> System.out.println(1);
+						case false -> System.out.println(0);
+						case null, default -> System.out.println("Error");
+					}
+				}
+			}
+			"""
+			},
+			"----------\n" +
+			"1. ERROR in X.java (at line 5)\r\n" +
+			"	switch (b) {\n" +
+			"			case true -> System.out.println(1);\n" +
+			"			case false -> System.out.println(0);\n" +
+			"			case null, default -> System.out.println(\"Error\");\n" +
+			"		}\r\n" +
+			"	^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n" +
+			"Switch cannot have both boolean values and a default label\n" +
+			"----------\n");
+	}
+	public void testJDK8348410_negative() {
+		Runner runner = new Runner();
+		runner.customOptions = getCompilerOptions(false); // preview NOT enabled
+		runner.testFiles = new String[] {
+				"Test.java",
+				"""
+				 public class Test {
+					public static void main(String[] args) {
+						new Test().d(true);
+					}
+
+					void d(Boolean b) {
+						switch (b) {
+							case true -> System.out.println("1");
+							case false -> System.out.println("2");
+						};
+					}
+				}
+				"""
+			};
+		runner.expectedCompilerLog = """
+			----------
+			1. ERROR in Test.java (at line 7)
+				switch (b) {
+				        ^
+			An enhanced switch statement should be exhaustive; a default label expected
+			----------
+			2. ERROR in Test.java (at line 8)
+				case true -> System.out.println("1");
+				     ^^^^
+			Case constant of type boolean is incompatible with switch selector type Boolean
+			----------
+			3. ERROR in Test.java (at line 9)
+				case false -> System.out.println("2");
+				     ^^^^^
+			Case constant of type boolean is incompatible with switch selector type Boolean
+			----------
+			""";
+		runner.javacTestOptions = JavacHasABug.JavacBug8348410;
+		runner.runNegativeTest();
+	}
+	public void testJDK8348410_positive() {
+		Runner runner = new Runner();
+		runner.customOptions = getCompilerOptions(true); // preview enabled
+		runner.testFiles = new String[] {
+				"Test.java",
+				"""
+				 public class Test {
+					public static void main(String[] args) {
+						new Test().d(true);
+					}
+
+					void d(Boolean b) {
+						switch (b) {
+							case true -> System.out.println("1");
+							case false -> System.out.println("2");
+						};
+					}
+				}
+				"""
+			};
+		runner.javacTestOptions = JAVAC_OPTIONS;
+		runner.vmArguments = VMARGS;
+		runner.expectedOutputString = "1";
+		runner.runConformTest();
+	}
+	public void testJDK8348410_previewFlag() {
+		Runner runner = new Runner();
+		runner.customOptions = getCompilerOptions(true); // preview enabled
+		runner.testFiles = new String[] {
+				"Test.java",
+				"""
+				 public class Test {
+					public static void main(String[] args) {
+						new Test().d(true);
+					}
+
+					void d(Boolean b) {
+						switch (b) {
+							case true -> System.out.println("1");
+							case false -> System.out.println("2");
+						};
+					}
+				}
+				"""
+			};
+		runner.javacTestOptions = JAVAC_OPTIONS;
+//		runner.vmArguments = VMARGS; not passing --enable-preview to java
+		runner.expectedErrorString =
+				"""
+				java.lang.UnsupportedClassVersionError: Preview features are not enabled for Test (class file version 70.65535). Try running with '--enable-preview'
+				""";
+		runner.runConformTest();
+	}
+	public void testGH3128() {
+		runConformTest(new String[] {
+				"X.java",
+				"""
+				class X {
+					public void foo(Boolean boxed) {
+						switch (boxed) {
+							case boolean b -> { System.out.print(b); }
+							default -> {}
+						}
+					}
+					public static void main(String... args) {
+						new X().foo(true);
+					}
+				}
+				"""
+			},
+			"true");
+	}
+	public void testJDK8348901() {
+		// according to https://bugs.openjdk.org/browse/JDK-8348901 the null type is to be admitted when case null is present
+		runConformTest(new String[] {
+				"X.java",
+				"""
+				public class X {
+					public static void main(String[] args) {
+						switch (null) {
+							case null -> System.out.println("Null");
+							default-> System.out.println("Default");
+						}
+					}
+				}
+				"""
+			},
+			"Null");
+	}
+	public void testGH3369_statement() {
+		runNegativeTest(new String[] {
+				"X.java",
+				"""
+				public class X {
+					public static void main(String[] args) {
+						switch (main(null)) {
+
+						}
+					}
+				}
+				"""
+			},
+			"----------\n" +
+			"1. ERROR in X.java (at line 3)\n" +
+			"	switch (main(null)) {\n" +
+			"	        ^^^^^^^^^^\n" +
+			"This expression yields no value\n" +
+			"----------\n");
+	}
+	public void testGH3369_expression() {
+		runNegativeTest(new String[] {
+				"X.java",
+				"""
+				public class X {
+					int foo() {
+						return switch (bar()) {
+							default -> 1;
+						};
+					}
+					void bar() {}
+				}
+				"""
+			},
+			"----------\n" +
+			"1. ERROR in X.java (at line 3)\n" +
+			"	return switch (bar()) {\n" +
+			"	               ^^^^^\n" +
+			"This expression yields no value\n" +
+			"----------\n");
+	}
+	public void testJEP530Example1() {
+		runNegativeTest(new String[] {
+				"X.java",
+				"""
+				@SuppressWarnings("preview")
+				public class X {
+					void foo() {
+						int j = 1;
+						switch(j) {
+							case int i ->
+								System.out.println("An int");
+							case 42 ->					// Error - dominated!
+								System.out.println("42!");
+						}
+					}
+				}
+				"""
+			},
+			"""
+			----------
+			1. ERROR in X.java (at line 8)
+				case 42 ->					// Error - dominated!
+				     ^^
+			This case label is dominated by one of the preceding case labels
+			----------
+			""");
+	}
+	public void testJEP530Example2() {
+		runNegativeTest(new String[] {
+				"X.java",
+				"""
+				@SuppressWarnings("preview")
+				public class X {
+					void foo() {
+						int j = 1;
+						switch(j) {
+							case byte b ->
+								System.out.println("A byte");
+							case 127 ->							// Error - dominated!
+								System.out.println("An int that can be represented as a byte exactly");
+							case short b ->
+								System.out.println("A short");
+							case 32767 ->						// Error - dominated!
+								System.out.println("An int that can be represented as a short exactly");
+							case char c ->
+								System.out.println("A char");
+							case 65535 ->						// Error - dominated!
+								System.out.println("An int that can be represented as a char exactly");
+							case float f ->
+								System.out.println("A float");
+							case 16_777_216 ->					// Error - dominated!
+								System.out.println("An integer that can be represented as a float exactly");
+							default ->
+								System.out.println("Integer that cannot be represented as a float exactly");
+						}
+						switch(j) {
+							case byte b ->
+								System.out.println("A byte");
+							case 260 ->						// not dominated
+								System.out.println("An int that can be represented as a byte exactly");
+							case short b ->
+								System.out.println("A short");
+							case 40000 ->					// not dominated
+								System.out.println("An int that can be represented as a short exactly");
+							case char c ->
+								System.out.println("A char");
+							case 70000 ->					// not dominated
+								System.out.println("An int that can be represented as a char exactly");
+							case float f ->
+								System.out.println("A float");
+							case 16_777_216 + 1 ->			// not dominated
+								System.out.println("An integer that can be represented as a float exactly");
+							default ->
+								System.out.println("Integer that cannot be represented as a float exactly");
+						}
+					}
+				}
+				"""
+			},
+			"""
+			----------
+			1. ERROR in X.java (at line 8)
+				case 127 ->							// Error - dominated!
+				     ^^^
+			This case label is dominated by one of the preceding case labels
+			----------
+			2. ERROR in X.java (at line 12)
+				case 32767 ->						// Error - dominated!
+				     ^^^^^
+			This case label is dominated by one of the preceding case labels
+			----------
+			3. ERROR in X.java (at line 16)
+				case 65535 ->						// Error - dominated!
+				     ^^^^^
+			This case label is dominated by one of the preceding case labels
+			----------
+			4. ERROR in X.java (at line 20)
+				case 16_777_216 ->					// Error - dominated!
+				     ^^^^^^^^^^
+			This case label is dominated by one of the preceding case labels
+			----------
+			""");
+	}
+	public void testJEP530Example2_short() {
+		runNegativeTest(new String[] {
+				"X.java",
+				"""
+				@SuppressWarnings("preview")
+				public class X {
+					static final short one_twentyseven = 127;
+					void foo() {
+						short j = 1;
+						switch(j) {
+							case byte b ->
+								System.out.println("A byte");
+							case one_twentyseven ->			// Error - dominated!
+								System.out.println("A short that can be represented as a byte exactly");
+							case short b ->
+								System.out.println("A short");
+							case Short.MAX_VALUE ->			// Error - dominated!
+								System.out.println("A short that can be represented as a short exactly");
+						}
+						switch(j) {
+							case byte b ->
+								System.out.println("A byte");
+							case 260 ->						// not dominated
+								System.out.println("An int that can be represented as a byte exactly");
+							default ->
+								System.out.println("Integer that cannot be represented as a float exactly");
+						}
+					}
+				}
+				"""
+			},
+			"""
+			----------
+			1. ERROR in X.java (at line 9)
+				case one_twentyseven ->			// Error - dominated!
+				     ^^^^^^^^^^^^^^^
+			This case label is dominated by one of the preceding case labels
+			----------
+			2. ERROR in X.java (at line 13)
+				case Short.MAX_VALUE ->			// Error - dominated!
+				     ^^^^^^^^^^^^^^^
+			This case label is dominated by one of the preceding case labels
+			----------
+			""");
+	}
+	public void testJEP530Example2_long_integral() {
+		runNegativeTest(new String[] {
+				"X.java",
+				"""
+				@SuppressWarnings("preview")
+				public class X {
+					void foo() {
+						long j = 1;
+						switch(j) {
+							case byte b ->
+								System.out.println("A byte");
+							case 127l ->					// Error - dominated!
+								System.out.println("A long that can be represented as a byte exactly");
+							case short b ->
+								System.out.println("A short");
+							case 32767l ->					// Error - dominated!
+								System.out.println("A long that can be represented as a short exactly");
+							case char c ->
+								System.out.println("A char");
+							case 65535l ->					// Error - dominated!
+								System.out.println("A long that can be represented as a char exactly");
+							case int i ->
+								System.out.println("An int");
+							case 16_777_216l -> 			// Error - dominated!
+								System.out.println("A long that can be represented as an int exactly");
+							default ->
+								System.out.println("Long that cannot be represented as a double exactly");
+						}
+						switch(j) {
+							case byte b ->
+								System.out.println("A byte");
+							case 260l ->					// not dominated
+								System.out.println("A long that can be represented as a byte exactly");
+							case short b ->
+								System.out.println("A short");
+							case 40000l ->					// not dominated
+								System.out.println("A long that can be represented as a short exactly");
+							case char c ->
+								System.out.println("A char");
+							case 70000l ->					// not dominated
+								System.out.println("A long that can be represented as a char exactly");
+							case int i ->
+								System.out.println("An int");
+							case 1_000_000_000_000l -> 		// not dominated
+								System.out.println("A long that can be represented as an int exactly");
+							default ->
+								System.out.println("Long that cannot be represented as a double exactly");
+						}
+					}
+				}
+				"""
+			},
+			"""
+			----------
+			1. ERROR in X.java (at line 8)
+				case 127l ->					// Error - dominated!
+				     ^^^^
+			This case label is dominated by one of the preceding case labels
+			----------
+			2. ERROR in X.java (at line 12)
+				case 32767l ->					// Error - dominated!
+				     ^^^^^^
+			This case label is dominated by one of the preceding case labels
+			----------
+			3. ERROR in X.java (at line 16)
+				case 65535l ->					// Error - dominated!
+				     ^^^^^^
+			This case label is dominated by one of the preceding case labels
+			----------
+			4. ERROR in X.java (at line 20)
+				case 16_777_216l -> 			// Error - dominated!
+				     ^^^^^^^^^^^
+			This case label is dominated by one of the preceding case labels
+			----------
+			""");
+	}
+	public void testJEP530Example2_long_fp() {
+		runNegativeTest(new String[] {
+				"X.java",
+				"""
+				@SuppressWarnings("preview")
+				public class X {
+					void foo() {
+						long j = 1;
+						switch(j) {
+							case float f ->
+								System.out.println("A float");
+							case 16_777_216l ->					// Error - dominated!
+								System.out.println("An integer that can be represented as a float exactly");
+							case double d ->
+								System.out.println("A double");
+							case 100_000_000_000_000_000l ->	// Error - dominated!
+								System.out.println("A long that can be represented as a double exactly");
+							default ->
+								System.out.println("Long that cannot be represented as a double exactly");
+						}
+						switch(j) {
+							case float f ->
+								System.out.println("A float");
+							case 16_777_216l + 1 ->					// not dominated
+								System.out.println("An integer that can be represented as a float exactly");
+							case double d ->
+								System.out.println("A float");
+							case 100_000_000_000_000_000l + 1 ->	// not dominated
+								System.out.println("A long that can be represented as a double exactly");
+							default ->
+								System.out.println("Long that cannot be represented as a double exactly");
+						}
+					}
+				}
+				"""
+			},
+			"""
+			----------
+			1. ERROR in X.java (at line 8)
+				case 16_777_216l ->					// Error - dominated!
+				     ^^^^^^^^^^^
+			This case label is dominated by one of the preceding case labels
+			----------
+			2. ERROR in X.java (at line 12)
+				case 100_000_000_000_000_000l ->	// Error - dominated!
+				     ^^^^^^^^^^^^^^^^^^^^^^^^
+			This case label is dominated by one of the preceding case labels
+			----------
+			""");
+	}
+	public void testJEP530Example2_float() {
+		runNegativeTest(new String[] {
+				"X.java",
+				"""
+				@SuppressWarnings("preview")
+				public class X {
+					void foo() {
+						float j = 1;
+						switch(j) {
+							case byte b ->
+								System.out.println("A byte");
+							case 127f ->					// Error - dominated!
+								System.out.println("A float that can be represented as a byte exactly");
+							case short b ->
+								System.out.println("A short");
+							case 32767f ->					// Error - dominated!
+								System.out.println("A float that can be represented as a short exactly");
+							case char c ->
+								System.out.println("A char");
+							case 65535f ->					// Error - dominated!
+								System.out.println("A float that can be represented as a char exactly");
+							case int i ->
+								System.out.println("An int");
+							case 16_777_216f -> 				// Error - dominated!
+								System.out.println("A float that can be represented as an int exactly");
+							case long l ->
+								System.out.println("A long");
+							case 100_000_000_000_000_000f ->	// Error - dominated!
+								System.out.println("A float that can be represented as a long exactly");
+							default ->
+								System.out.println("Float that cannot be represented as a long exactly");
+						}
+						switch(j) {
+							case byte b ->
+								System.out.println("A byte");
+							case 260f ->					// not dominated
+								System.out.println("A float that can be represented as a byte exactly");
+							case short b ->
+								System.out.println("A short");
+							case 40000f ->					// not dominated
+								System.out.println("A float that can be represented as a short exactly");
+							case char c ->
+								System.out.println("A char");
+							case 70000f ->					// not dominated
+								System.out.println("A float that can be represented as a char exactly");
+							case int i ->
+								System.out.println("An int");
+							case 1e12f -> 				// not dominated
+								System.out.println("A float that can be represented as an int exactly");
+							case long l ->
+								System.out.println("A long");
+							case 1e22f +1 ->	// not dominated
+								System.out.println("A float that can be represented as a long exactly");
+							default ->
+								System.out.println("Long that cannot be represented as a double exactly");
+						}
+					}
+				}
+				"""
+			},
+			"""
+			----------
+			1. ERROR in X.java (at line 8)
+				case 127f ->					// Error - dominated!
+				     ^^^^
+			This case label is dominated by one of the preceding case labels
+			----------
+			2. ERROR in X.java (at line 12)
+				case 32767f ->					// Error - dominated!
+				     ^^^^^^
+			This case label is dominated by one of the preceding case labels
+			----------
+			3. ERROR in X.java (at line 16)
+				case 65535f ->					// Error - dominated!
+				     ^^^^^^
+			This case label is dominated by one of the preceding case labels
+			----------
+			4. ERROR in X.java (at line 20)
+				case 16_777_216f -> 				// Error - dominated!
+				     ^^^^^^^^^^^
+			This case label is dominated by one of the preceding case labels
+			----------
+			5. ERROR in X.java (at line 24)
+				case 100_000_000_000_000_000f ->	// Error - dominated!
+				     ^^^^^^^^^^^^^^^^^^^^^^^^
+			This case label is dominated by one of the preceding case labels
+			----------
+			""");
+	}
+	public void testJEP530Example2_double() {
+		runNegativeTest(new String[] {
+				"X.java",
+				"""
+				@SuppressWarnings("preview")
+				public class X {
+					void foo() {
+						double j = 1;
+						switch(j) {
+							case byte b ->
+								System.out.println("A byte");
+							case 127d ->						// Error - dominated!
+								System.out.println("A double that can be represented as a byte exactly");
+							case short b ->
+								System.out.println("A short");
+							case 32767d ->						// Error - dominated!
+								System.out.println("A double that can be represented as a short exactly");
+							case char c ->
+								System.out.println("A char");
+							case 65535d ->						// Error - dominated!
+								System.out.println("A double that can be represented as a char exactly");
+							case int i ->
+								System.out.println("An int");
+							case 16_777_216d -> 				// Error - dominated!
+								System.out.println("A double that can be represented as an int exactly");
+							case long l ->
+								System.out.println("A long");
+							case 100_000_000_000_000_000d ->	// Error - dominated!
+								System.out.println("A double that can be represented as a long exactly");
+							default ->
+								System.out.println("double that cannot be represented as a long exactly");
+						}
+						switch(j) {
+							case byte b ->
+								System.out.println("A byte");
+							case 260d ->					// not dominated
+								System.out.println("A double that can be represented as a byte exactly");
+							case short b ->
+								System.out.println("A short");
+							case 40000d ->					// not dominated
+								System.out.println("A double that can be represented as a short exactly");
+							case char c ->
+								System.out.println("A char");
+							case 70000d ->					// not dominated
+								System.out.println("A double that can be represented as a char exactly");
+							case int i ->
+								System.out.println("An int");
+							case 1e12d -> 					// not dominated
+								System.out.println("A double that can be represented as an int exactly");
+							case long l ->
+								System.out.println("A long");
+							case 1e22d +1 ->				// not dominated
+								System.out.println("A double that can be represented as a long exactly");
+							default ->
+								System.out.println("double that cannot be represented as a double exactly");
+						}
+					}
+				}
+				"""
+			},
+			"""
+			----------
+			1. ERROR in X.java (at line 8)
+				case 127d ->						// Error - dominated!
+				     ^^^^
+			This case label is dominated by one of the preceding case labels
+			----------
+			2. ERROR in X.java (at line 12)
+				case 32767d ->						// Error - dominated!
+				     ^^^^^^
+			This case label is dominated by one of the preceding case labels
+			----------
+			3. ERROR in X.java (at line 16)
+				case 65535d ->						// Error - dominated!
+				     ^^^^^^
+			This case label is dominated by one of the preceding case labels
+			----------
+			4. ERROR in X.java (at line 20)
+				case 16_777_216d -> 				// Error - dominated!
+				     ^^^^^^^^^^^
+			This case label is dominated by one of the preceding case labels
+			----------
+			5. ERROR in X.java (at line 24)
+				case 100_000_000_000_000_000d ->	// Error - dominated!
+				     ^^^^^^^^^^^^^^^^^^^^^^^^
+			This case label is dominated by one of the preceding case labels
+			----------
+			""");
+	}
+	public void testJEP530Example3() {
+		// no primitives, but new dominance rule from JEP 530
+		runNegativeTest(new String[] {
+				"Dominance.java",
+				"""
+				interface A {}
+				interface B {}
+				class Dominance {
+					void m1(A objA) {
+						switch (objA) {
+						case A a ->
+								System.out.println("A");
+						case B b ->         // Error - dominated!
+								System.out.println("B");
+						}
+					}
+				}
+				"""
+			},
+			"""
+			----------
+			1. ERROR in Dominance.java (at line 8)
+				case B b ->         // Error - dominated!
+				     ^^^
+			This case label is dominated by one of the preceding case labels
+			----------
+			""");
+	}
+	public void testJEP530Example5() {
+		runNegativeTest(new String[] {
+				"Dominance.java",
+				"""
+				@SuppressWarnings("preview")
+				class Dominance {
+					void m2(int j) {
+						switch(j) {
+							case int i   ->
+								System.out.println("An int");
+							case float f ->     // Error - dominated!
+								System.out.println("A float");
+						}
+					}
+				}
+				"""
+			},
+			"""
+			----------
+			2. ERROR in Dominance.java (at line 7)
+				case float f ->     // Error - dominated!
+				     ^^^^^^^
+			This case label is dominated by one of the preceding case labels
+			----------
+			""");
+	}
+	public void testJEP530Example6() {
+		runConformTest(new String[] {
+				"X.java",
+				"""
+				@SuppressWarnings("preview")
+				class X {
+					static int doubleExhaustive(Integer i) {
+						return switch (i) {
+							case double p -> 0;
+						};
+					}
+					void main() {
+						System.out.println(doubleExhaustive(13));
+					}
+				}
+				"""
+			},
+			"0");
+	}
+	public void testJEP530Example7() {
+		runConformTest(new String[] {
+				"X.java",
+				"""
+				@SuppressWarnings("preview")
+				class X {
+					int examineFloat(float f) {
+						final float PInf = Float.POSITIVE_INFINITY;
+						final float NInf = Float.NEGATIVE_INFINITY;
+						final float NaN = Float.NaN;
+						return switch (f) {
+							case NInf  -> -100;
+							case -0.0f -> -1;
+							case  0.0f -> +1;
+							case PInf  -> +100;
+							case NaN   -> 0;
+							default    -> 42;
+						};
+					}
+					void printExamineFlow(float f) {
+						System.out.print(examineFloat(f));
+						System.out.print(" ");
+					}
+					void main() {
+						printExamineFlow(-1.0f / 0.0f); // -100
+						printExamineFlow(1.0f / 0.0f);  //  100
+						printExamineFlow(0.0f * -1.0f); //   -1
+						printExamineFlow(0.0f *  1.0f); //    1
+						printExamineFlow(Float.intBitsToFloat(0x7fc00000)); // 0
+						printExamineFlow(Float.intBitsToFloat(0x7fc00001)); // 0
+						System.out.println();
+					}
+				}
+				"""
+			},
+			"-100 100 -1 1 0 0");
 	}
 }

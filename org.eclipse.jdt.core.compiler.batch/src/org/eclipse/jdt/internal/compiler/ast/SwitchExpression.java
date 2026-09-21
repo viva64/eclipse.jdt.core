@@ -73,7 +73,7 @@ public class SwitchExpression extends SwitchStatement implements IPolyExpression
 				TypeBinding uniformType = null;
 				for (Expression rExpression : this.rExpressions)
 					uniformType = uniformType == null ? rExpression.resolvedType : NullAnnotationMatching.moreDangerousType(uniformType, rExpression.resolvedType);
-				return uniformType;
+				return resolveAsType(uniformType);
 			}
 
 			if (this.allBoolean)
@@ -134,13 +134,11 @@ public class SwitchExpression extends SwitchStatement implements IPolyExpression
 		/** Add an expression to known result expressions, gather some aggregate characteristics if in standalone context.
 		 *  @return a flag indicating the overall well-formedness of result expression set.
 		 */
-		public boolean add(/*@NonNull*/ Expression rxpression) {
+		public boolean add(/*@NonNull*/ Expression rxpression, TypeBinding rxpressionType) {
 
 			this.rExpressions.add(rxpression);
-
-			TypeBinding rxpressionType = rxpression.resolvedType;
 			if (rxpressionType == null) { // tolerate poly-expression resolving to null in the absence of target type.
-				if (!rxpression.isPolyExpression() || ((IPolyExpression) rxpression).expectedType() != null)
+				if (!rxpression.isPolyExpression() || ((IPolyExpression) rxpression).expectedType() != null || SwitchExpression.this.expressionContext == VANILLA_CONTEXT)
 					this.allWellFormed = false;
 			} else if (!rxpressionType.isValidBinding()) {
 				this.allWellFormed = false;
@@ -193,12 +191,6 @@ public class SwitchExpression extends SwitchStatement implements IPolyExpression
 	protected void reportMissingEnumConstantCase(BlockScope upperScope, FieldBinding enumConstant) {
 		// seeming identical body with super method causes varied overload selection
 		upperScope.problemReporter().missingEnumConstantCase(this, enumConstant);
-	}
-	@Override
-	protected int getFallThroughState(Statement stmt, BlockScope blockScope) {
-		if (stmt.isTrulyExpression() || stmt instanceof ThrowStatement)
-			return BREAKING;
-		return stmt.canCompleteNormally() ? FALLTHROUGH : BREAKING;
 	}
 	@Override
 	public boolean checkNPE(BlockScope skope, FlowContext flowContext, FlowInfo flowInfo, int ttlForFieldCheck) {
@@ -406,16 +398,6 @@ public class SwitchExpression extends SwitchStatement implements IPolyExpression
 	@Override
 	public FlowInfo analyseCode(BlockScope currentScope, FlowContext flowContext, FlowInfo flowInfo) {
 		flowInfo = super.analyseCode(currentScope, flowContext, flowInfo);
-		if ((this.switchBits & LabeledRules) != 0) { // 15.28.1
-			for (Statement stmt : this.statements) {
-				if (stmt instanceof Block && stmt.canCompleteNormally())
-					currentScope.problemReporter().switchExpressionBlockCompletesNormally(stmt);
-			}
-		} else {
-			Statement ultimateStmt = this.statements[this.statements.length - 1]; // length guaranteed > 0
-			if (ultimateStmt.canCompleteNormally())
-				currentScope.problemReporter().switchExpressionBlockCompletesNormally(ultimateStmt);
-		}
 
 		if (currentScope.compilerOptions().enableSyntacticNullAnalysisForFields)
 			flowContext.expireNullCheckedFieldInfo(); // wipe information that was meant only for this result expression:

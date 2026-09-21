@@ -27,6 +27,7 @@ package org.eclipse.jdt.internal.core;
 
 import java.io.*;
 import java.net.URI;
+import java.nio.file.NoSuchFileException;
 import java.text.MessageFormat;
 import java.time.Instant;
 import java.util.*;
@@ -79,6 +80,7 @@ import org.eclipse.jdt.internal.core.search.BasicSearchEngine;
 import org.eclipse.jdt.internal.core.search.IRestrictedAccessTypeRequestor;
 import org.eclipse.jdt.internal.core.search.JavaWorkspaceScope;
 import org.eclipse.jdt.internal.core.search.indexing.IndexManager;
+import org.eclipse.jdt.internal.core.search.indexing.DerivedSourceSearchParticipantRegistry;
 import org.eclipse.jdt.internal.core.search.processing.IJob;
 import org.eclipse.jdt.internal.core.search.processing.JobManager;
 import org.eclipse.jdt.internal.core.util.DeduplicationUtil;
@@ -328,6 +330,8 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 	public static final String CONTAINER_INITIALIZER_PERF = JavaCore.PLUGIN_ID + "/perf/containerinitializer" ; //$NON-NLS-1$
 	public static final String RECONCILE_PERF = JavaCore.PLUGIN_ID + "/perf/reconcile" ; //$NON-NLS-1$
 
+	public static final String DISABLE_RESTRICTED_FILE_INDEXING_PREFERENCE = "disableRestrictedFileIndexing" ; //$NON-NLS-1$
+
 	public static boolean PERF_VARIABLE_INITIALIZER = false;
 	public static boolean PERF_CONTAINER_INITIALIZER = false;
 	// Non-static, which will give it a chance to retain the default when and if JavaModelManager is restarted.
@@ -347,6 +351,8 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 	public final IEclipsePreferences[] preferencesLookup = new IEclipsePreferences[2];
 	static final int PREF_INSTANCE = 0;
 	static final int PREF_DEFAULT = 1;
+
+	private static volatile boolean disableRestrictedFileIndexing;
 
 	static final Object[][] NO_PARTICIPANTS = new Object[0][];
 
@@ -980,6 +986,8 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 		return null;
 	}
 
+	private static volatile String lastProjectNameUsed;
+
 	/**
 	 * Returns the package fragment or package fragment root corresponding to the given folder,
 	 * its parent or great parent being the given project.
@@ -999,6 +1007,15 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 			project = JavaCore.create(folder.getProject());
 			element = determineIfOnClasspath(folder, project);
 			if (element == null) {
+				IJavaProject lastProject = lastProjectNameUsed == null ? null
+						: JavaModelManager.getJavaModelManager().getJavaModel().getJavaProject(lastProjectNameUsed);
+				if (lastProject != null) {
+					// try to avoid searching through all projects
+					element = determineIfOnClasspath(folder, lastProject);
+					if (element != null) {
+						return element;
+					}
+				}
 				// walk all projects and find one that have the given folder on its classpath
 				IJavaProject[] projects;
 				try {
@@ -1007,10 +1024,13 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 					return null;
 				}
 				for (IJavaProject p : projects) {
-					project = p;
-					element = determineIfOnClasspath(folder, project);
-					if (element != null)
-						break;
+					if (!p.equals(lastProject)) {
+						element = determineIfOnClasspath(folder, p);
+						if (element != null) {
+							lastProjectNameUsed = p.getElementName();
+							return element;
+						}
+					}
 				}
 			}
 		} else {
@@ -1782,7 +1802,9 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 					UserLibraryManager manager = JavaModelManager.getUserLibraryManager();
 	        		manager.updateUserLibrary(libName, (String)event.getNewValue());
 	        	}
-	        }
+	        } else if (propertyName.equals(DISABLE_RESTRICTED_FILE_INDEXING_PREFERENCE)) {
+				setDisableRestrictedFileIndexing();
+			}
         	// Reset all project caches (see https://bugs.eclipse.org/bugs/show_bug.cgi?id=233568 )
         	try {
         		IJavaProject[] projects = JavaModelManager.getJavaModelManager().getJavaModel().getJavaProjects();
@@ -2445,6 +2467,9 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 		}
 		if (!Platform.isRunning()) {
 			Hashtable<String, String> defaults = getDefaultOptionsNoInitialization();
+			if (VERBOSE) {
+				trace("Setting Java options cache"); //$NON-NLS-1$
+			}
 			this.optionsCache = defaults;
 			return new Hashtable<>(defaults);
 		}
@@ -2479,6 +2504,9 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 		addDeprecatedOptions(options);
 
 		Util.fixTaskTags(options);
+		if (VERBOSE) {
+			trace("Setting Java options cache"); //$NON-NLS-1$
+		}
 		// store built map in cache
 		this.optionsCache = new Hashtable<>(options);
 		// return built map
@@ -2552,6 +2580,9 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 			PerProjectInfo info= this.perProjectInfos.get(project);
 			if (info == null && create) {
 				info= new PerProjectInfo(project);
+				if (VERBOSE) {
+					trace("Created info for: " + project); //$NON-NLS-1$
+				}
 				this.perProjectInfos.put(project, info);
 			}
 			return info;
@@ -2664,17 +2695,7 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 	public HashMap<IJavaElement, IElementInfo> getTemporaryCache() {
 		HashMap<IJavaElement, IElementInfo> result = this.temporaryCache.get();
 		if (result == null) {
-			result = new HashMap<>() {
-				/**
-				 *
-				 */
-				private static final long serialVersionUID = 1L;
-
-				@Override
-				public IElementInfo put(IJavaElement key, IElementInfo value) {
-					return super.put(key, value);
-				}
-			};
+			result = new HashMap<>();
 			this.temporaryCache.set(result);
 		}
 		return result;
@@ -2973,9 +2994,8 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 					: lastInstant.until(now, java.time.temporal.ChronoUnit.MILLIS);
 			if (elapsedMs < 100 && elapsedWarningMs > 1000) {
 				this.lastWarning.set(now);
-				new Exception("Zipfile was opened multiple times wihtin " + elapsedMs + "ms in same thread " //$NON-NLS-1$ //$NON-NLS-2$
-						+ Thread.currentThread() + ", consider caching: " + path) //$NON-NLS-1$
-								.printStackTrace();
+				trace("Zipfile was opened multiple times wihtin " + elapsedMs + "ms in same thread " //$NON-NLS-1$ //$NON-NLS-2$
+						+ Thread.currentThread() + ", consider caching: " + path, new Exception()); //$NON-NLS-1$
 			}
 		}
 	}
@@ -3010,7 +3030,11 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 			// file may exist but for some reason is inaccessible
 			ArchiveValidity reason=ArchiveValidity.INVALID;
 			addInvalidArchive(path, reason);
-			throw new CoreException(new Status(IStatus.ERROR, JavaCore.PLUGIN_ID, -1, Messages.status_IOException, e));
+			int code = -1;
+			if(e instanceof FileNotFoundException || e instanceof NoSuchFileException) {
+				code = IJavaModelStatusConstants.ELEMENT_DOES_NOT_EXIST;
+			}
+			throw new JavaModelException(new JavaModelStatus(code, e));
 		}
 	}
 
@@ -3415,6 +3439,8 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 			}
 		};
 		((IEclipsePreferences) this.preferencesLookup[PREF_DEFAULT].parent()).addNodeChangeListener(this.defaultNodeListener);
+
+		setDisableRestrictedFileIndexing();
 	}
 
 	void touchProjectsAsync(final IProject[] projectsToTouch) throws JavaModelException {
@@ -4306,6 +4332,9 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 			PerProjectInfo info= this.perProjectInfos.get(project);
 			if (info != null) {
 				this.perProjectInfos.remove(project);
+				if (VERBOSE) {
+					trace("Removed info for: " + project); //$NON-NLS-1$
+				}
 				if (removeExtJarInfo) {
 					info.forgetExternalTimestampsAndIndexes();
 				}
@@ -4717,7 +4746,14 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 	}
 
 	public static void trace(String msg, Exception e) {
-		DEBUG_TRACE.trace(null, msg, e);
+		if (TRACE_TO_STDOUT) {
+			System.out.println(msg);
+			if (e != null) {
+				e.printStackTrace();
+			}
+		} else {
+			DEBUG_TRACE.trace(null, msg, e);
+		}
 	}
 
 	public static void traceDumpStack() {
@@ -5386,6 +5422,9 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 			getOptions();
 		} else {
 			Util.fixTaskTags(cachedValue);
+			if (VERBOSE) {
+				trace("Setting Java options cache"); //$NON-NLS-1$
+			}
 			// update cache
 			this.optionsCache = cachedValue;
 		}
@@ -5406,6 +5445,9 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 			this.propertyListener = new IEclipsePreferences.IPreferenceChangeListener() {
 				@Override
 				public void preferenceChange(PreferenceChangeEvent event) {
+					if (VERBOSE) {
+						trace("Invalidating Java options cache"); //$NON-NLS-1$
+					}
 					JavaModelManager.this.optionsCache = null;
 				}
 			};
@@ -5416,6 +5458,9 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 				@Override
 				public void preferenceChange(PreferenceChangeEvent event) {
 					if (ResourcesPlugin.PREF_ENCODING.equals(event.getKey())) {
+						if (VERBOSE) {
+							trace("Invalidating Java options cache"); //$NON-NLS-1$
+						}
 						JavaModelManager.this.optionsCache = null;
 					}
 				}
@@ -5522,6 +5567,9 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 		if (contentTypeManager != null) {
 			contentTypeManager.removeContentTypeChangeListener(this);
 		}
+
+		// Stop listening to search participant extension changes
+		DerivedSourceSearchParticipantRegistry.disposeInstance();
 
 		// Stop indexing
 		if (this.indexManager != null) {
@@ -5731,5 +5779,14 @@ public class JavaModelManager implements ISaveParticipant, IContentTypeChangeLis
 		} finally {
 			getJavaModelManager().flushZipFiles(instance);
 		}
+	}
+
+	private static void setDisableRestrictedFileIndexing() {
+		disableRestrictedFileIndexing =  Platform.getPreferencesService().getBoolean(
+				JavaCore.PLUGIN_ID, DISABLE_RESTRICTED_FILE_INDEXING_PREFERENCE, false, null);
+	}
+
+	public static boolean disableRestrictedFileIndexing() {
+		return disableRestrictedFileIndexing;
 	}
 }

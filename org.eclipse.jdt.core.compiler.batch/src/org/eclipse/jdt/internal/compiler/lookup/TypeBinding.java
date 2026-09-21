@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2000, 2023 IBM Corporation and others.
+ * Copyright (c) 2000, 2025 IBM Corporation and others.
  *
  * This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License 2.0
@@ -44,6 +44,8 @@ import java.util.Set;
 import org.eclipse.jdt.core.compiler.CharOperation;
 import org.eclipse.jdt.internal.compiler.ast.Wildcard;
 import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
+import org.eclipse.jdt.internal.compiler.tool.EclipseCompiler;
+import org.eclipse.jdt.internal.compiler.util.Util;
 
 /*
  * Not all fields defined by this type (& its subclasses) are initialized when it is created.
@@ -58,8 +60,6 @@ import org.eclipse.jdt.internal.compiler.impl.CompilerOptions;
 abstract public class TypeBinding extends Binding {
 
 	public int id = TypeIds.NoId;
-	public long tagBits = 0; // See values in the interface TagBits below
-	public int extendedTagBits = 0; // See values in the interface ExtendedTagBits
 
 	protected AnnotationBinding [] typeAnnotations = Binding.NO_ANNOTATIONS;
 
@@ -184,9 +184,13 @@ public String annotatedDebugName() {
 		buffer.append('.');
 	}
 	AnnotationBinding [] annotations = getTypeAnnotations();
-	for (int i = 0, length = annotations == null ? 0 : annotations.length; i < length; i++) {
-		buffer.append(annotations[i]);
-		buffer.append(' ');
+	if (annotations == Binding.AWAITED_ANNOTATIONS) {
+		buffer.append("@<Awaited ...> "); //$NON-NLS-1$
+	} else {
+		for (int i = 0, length = annotations == null ? 0 : annotations.length; i < length; i++) {
+			buffer.append(annotations[i]);
+			buffer.append(' ');
+		}
 	}
 	buffer.append(sourceName());
 	return buffer.toString();
@@ -244,21 +248,6 @@ public List<TypeBinding> collectMissingTypes(List<TypeBinding> missingTypes) {
 	return missingTypes;
 }
 
-/**
- * Collect the substitutes into a map for certain type variables inside the receiver type
- * e.g.<pre>{@code
- * Collection<T>.findSubstitute(T, Collection<List<X>>):   T --> List<X>
- *
- * Constraints:
- *   A << F   corresponds to:   F.collectSubstitutes(..., A, ..., CONSTRAINT_EXTENDS (1))
- *   A = F    corresponds to:   F.collectSubstitutes(..., A, ..., CONSTRAINT_EQUAL (0))
- *   A >> F   corresponds to:   F.collectSubstitutes(..., A, ..., CONSTRAINT_SUPER (2))
- * }</pre>
- */
-public void collectSubstitutes(Scope scope, TypeBinding actualType, InferenceContext inferenceContext, int constraint) {
-	// no substitute by default
-}
-
 /** Virtual copy constructor: a copy is made of the receiver's entire instance state and then suitably
     parameterized by the arguments to the clone operation as seen fit by each type. Parameters may not
     make sense for every type in the hierarchy, in which case they are silently ignored. A type may
@@ -290,6 +279,10 @@ public int depth() {
 	return 0;
 }
 
+public int typeArgumentDepth() {
+	return 1;
+}
+
 /* Answer the receiver's enclosing method ... null if the receiver is not a local type.
  */
 public MethodBinding enclosingMethod() {
@@ -305,6 +298,14 @@ public ReferenceBinding enclosingType() {
 
 public TypeBinding erasure() {
 	return this;
+}
+
+public int enumConstantCount() {
+	throw EclipseCompiler.UNSUPPORTED_OPERATION;
+}
+
+public FieldBinding[] fields() {
+	return Binding.NO_FIELDS;
 }
 
 /**
@@ -728,7 +729,8 @@ public boolean isRecord() {
 }
 
 public boolean isRecordWithComponents() { // do records without components make sense ??!
-	return isRecord() && components() instanceof RecordComponentBinding[] && components().length > 0;
+	RecordComponentBinding [] components;
+	return isRecord() && (components = components()) != null && components.length > 0;
 }
 
 /* Answer true if the receiver type can be assigned to the argument type (right)
@@ -1399,7 +1401,7 @@ public boolean isTypeArgumentContainedBy(TypeBinding otherType) {
 					TypeBinding match = upperBound.findSuperTypeOriginatingFrom(otherBound);
 					if (match != null && (match = match.leafComponentType()).isRawType()) {
 						return TypeBinding.equalsEquals(match, otherBound.leafComponentType()); // forbide: Collection <=  ? extends Collection<?>
-																												// forbide: Collection[] <=  ? extends Collection<?>[]
+																								// forbide: Collection[] <=  ? extends Collection<?>[]
 					}
 					return upperBound.isCompatibleWith(otherBound);
 
@@ -1554,7 +1556,7 @@ public boolean needsUncheckedConversion(TypeBinding targetType) {
 	if (TypeBinding.equalsEquals(this, targetType))
 		return false;
 	targetType = targetType.leafComponentType();
-	if (!(targetType instanceof ReferenceBinding))
+	if (!(targetType instanceof ParameterizedTypeBinding))
 		return false;
 
 	TypeBinding currentType = leafComponentType();
@@ -1621,6 +1623,10 @@ public boolean hasValueBasedTypeAnnotation() {
 	return (this.extendedTagBits & ExtendedTagBits.AnnotationValueBased) != 0;
 }
 
+public boolean hasEnclosingInstanceContext() {
+	return false;
+}
+
 /**
  * Answer the qualified name of the receiver's package separated by periods
  * or an empty string if its the default package.
@@ -1652,7 +1658,7 @@ final public AnnotationBinding[] getTypeAnnotations() {
 
 public void setTypeAnnotations(AnnotationBinding[] annotations, boolean evalNullAnnotations) {
 	this.tagBits |= TagBits.HasTypeAnnotations;
-	if (annotations == null || annotations.length == 0)
+	if (annotations == null || (annotations.length == 0 && Util.effectivelyEqual(annotations, this.typeAnnotations)))
 		return;
 	this.typeAnnotations = annotations;
 	if (evalNullAnnotations) {
@@ -1683,11 +1689,6 @@ public char[] signature() {
 }
 
 public abstract char[] sourceName();
-
-public void swapUnresolved(UnresolvedReferenceBinding unresolvedType,
-		ReferenceBinding resolvedType, LookupEnvironment environment) {
-	// subclasses must override if they wrap another type binding
-}
 
 TypeBinding [] typeArguments () {
 	return null;
@@ -1734,6 +1735,10 @@ public static boolean notEquals(TypeBinding that, TypeBinding other) {
 		return true;
 	if (that.id != TypeIds.NoId && that.id == other.id)
 		return false;
+	if (that instanceof LocalTypeBinding && other instanceof LocalTypeBinding) {
+		// while a lambda is being resolved, consider a local type as equal to its variant from another lambda copy
+		return ((LocalTypeBinding) that).sourceStart != ((LocalTypeBinding) other).sourceStart;
+	}
 	return true;
 }
 /** Return the primordial type from which the receiver was cloned. Not all types track a prototype, only {@link SourceTypeBinding},

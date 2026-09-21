@@ -99,5 +99,41 @@
            id="org.eclipse.jdt.core.tests.model.resolver1">
      </resolver>
   </extension>
-	
+  
+  <extension point="org.eclipse.jdt.core.completionEngineProvider">
+    <resolver
+      class="org.eclipse.jdt.core.tests.model.TestCompletionEngineProvider"
+      id="org.eclipse.jdt.core.tests.model.TestCompletionEngineProvider" />
+  </extension>
+  <extension
+        point="org.eclipse.jdt.core.javaSearchDelegate">
+     <searchDelegate
+           class="org.eclipse.jdt.core.tests.model.TestJavaSearchDelegate"
+           id="org.eclipse.jdt.core.tests.model.TestJavaSearchDelegate">
+     </searchDelegate>
+  </extension>
+  <extension
+        point="org.eclipse.core.contenttype.contentTypes">
+     <file-association
+           content-type="org.eclipse.jdt.core.javaDerivedSource"
+           file-extensions="kt">
+     </file-association>
+  </extension>
+  <extension
+        point="org.eclipse.core.contenttype.contentTypes">
+     <file-association
+           content-type="org.eclipse.jdt.core.javaDerivedSource"
+           file-extensions="langx">
+     </file-association>
+  </extension>
+  <extension
+        point="org.eclipse.jdt.core.derivedSourceSearchParticipant">
+     <derivedSourceSearchParticipant
+           class="org.eclipse.jdt.core.tests.model.TestDerivedSourceSearchParticipant"
+           id="org.eclipse.jdt.core.tests.model.testDerivedSourceSearchParticipant"
+           fileExtensions="langx">
+     </derivedSourceSearchParticipant>
+  </extension>
+
+
 </plugin>

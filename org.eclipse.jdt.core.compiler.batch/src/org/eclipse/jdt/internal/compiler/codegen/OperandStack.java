@@ -18,6 +18,7 @@ import java.util.Stack;
 import java.util.function.Supplier;
 import org.eclipse.jdt.internal.compiler.ClassFile;
 import org.eclipse.jdt.internal.compiler.lookup.ArrayBinding;
+import org.eclipse.jdt.internal.compiler.lookup.IntersectionTypeBinding18;
 import org.eclipse.jdt.internal.compiler.lookup.ReferenceBinding;
 import org.eclipse.jdt.internal.compiler.lookup.Scope;
 import org.eclipse.jdt.internal.compiler.lookup.TypeBinding;
@@ -31,18 +32,21 @@ public class OperandStack {
 
 	private Stack<TypeBinding> stack;
 	private ClassFile classFile;
+	private Scope scope;
 
 	public OperandStack() {}
 
 	public OperandStack(ClassFile classFile) {
 		this.stack = new Stack<>();
 		this.classFile = classFile;
+		this.scope = classFile.referenceBinding.scope;
 	}
 
 	@SuppressWarnings("unchecked")
 	private OperandStack(OperandStack operandStack) {
 		this.stack = (Stack<TypeBinding>) operandStack.stack.clone();
 		this.classFile = operandStack.classFile;
+		this.scope = operandStack.scope;
 	}
 
 	protected OperandStack copy() {
@@ -59,19 +63,28 @@ public class OperandStack {
 		   As noted in §2.3.4 and §2.11.1, the Java Virtual Machine internally converts values of
 		   types boolean, byte, short, and char to type int.)
 		*/
-		TypeBinding temp;
-		switch(typeBinding.id) {
+		TypeBinding pushedType;
+		switch (typeBinding.id) {
 			case TypeIds.T_boolean:
 			case TypeIds.T_byte:
 			case TypeIds.T_short:
 			case TypeIds.T_char:
-				temp = TypeBinding.INT;
+				pushedType = TypeBinding.INT;
 				break;
 			default:
-				temp = typeBinding.erasure();
+				pushedType = typeBinding;
 				break;
 		}
-		this.stack.push(temp);
+		this.stack.push(pushedType);
+	}
+
+	private TypeBinding erasure(TypeBinding type) {
+		TypeBinding erasure = type.erasure();
+		if (erasure instanceof ArrayBinding && ((ArrayBinding) erasure).leafComponentType instanceof IntersectionTypeBinding18) {
+			ArrayBinding array = (ArrayBinding) erasure;
+			erasure = this.scope.createArrayType(this.scope.getJavaLangObject(), array.dimensions);
+		}
+		return erasure;
 	}
 
 	public void push(int localSlot) {
@@ -83,8 +96,7 @@ public class OperandStack {
 	}
 
 	public void push(char[] typeName) {
-		Scope scope = this.classFile.referenceBinding.scope;
-		Supplier<ReferenceBinding> finder = scope.getCommonReferenceBinding(typeName);
+		Supplier<ReferenceBinding> finder = this.scope.getCommonReferenceBinding(typeName);
 		TypeBinding type = finder != null ? finder.get() : TypeBinding.NULL;
 		push(type);
 	}
@@ -113,13 +125,20 @@ public class OperandStack {
 				expectedCategory = 2;
 				break;
 			default:
-				throw new AssertionError("Unexpected category"); //$NON-NLS-1$
+				throw new AssertionError("Unexpected operand category"); //$NON-NLS-1$
 		}
-
 		if (TypeIds.getCategory(t.id) != expectedCategory) {
 			throw new AssertionError("Unexpected operand at stack top"); //$NON-NLS-1$
 		}
 		return t;
+	}
+
+	/** reference cast the TOS operand (presumed to be category one) to given type */
+	public void cast(TypeBinding castedType) {
+		if (!castedType.isBaseType()) {
+			pop();
+			push(castedType);
+		}
 	}
 
 	public TypeBinding pop(TypeBinding top) {
@@ -186,7 +205,7 @@ public class OperandStack {
 				wellFormed = TypeBinding.equalsEquals(valueType, TypeBinding.INT);
 				break;
 			default:
-				wellFormed = valueType.isCompatibleWith(elementType);
+				wellFormed = valueType.isCompatibleWith(elementType) || erasure(valueType).isCompatibleWith(erasure(elementType));
 				break;
 		}
 		if (!wellFormed)
@@ -382,6 +401,11 @@ public class OperandStack {
 		@Override
 		public boolean depthEquals(int expected) {
 			return true;
+		}
+
+		@Override
+		public void cast(TypeBinding castedType) {
+			return;
 		}
 
 		@Override
